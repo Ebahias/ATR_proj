@@ -31,8 +31,10 @@ class Baia_carga {
 
         std::queue<Carga> _load;
 
-        sem_t bc_sem[4];
+        sem_t bc_sem;
 
+        sem_t arive_sem;
+        
         std::mutex m;
 
         int get_node_idx(int node_id);

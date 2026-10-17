@@ -15,6 +15,7 @@ Baia_carga::Baia_carga(int id, int rows, Node** nodes) {
     // Inicia um semáforo
     sem_init(&this->bc_sem, 0, rows);
 
+    sem_init(&this->arive_sem, 0, 0);
 }
 
 int Baia_carga::add_cargo(Carga cargo) {
@@ -24,6 +25,8 @@ int Baia_carga::add_cargo(Carga cargo) {
     this->_load.push(cargo);
 
     m.unlock();
+
+    sem_post(&this->arive_sem);
 
     return 0;
 }
@@ -62,13 +65,16 @@ Carga Baia_carga::consume_cargo(void) {
 
 int Baia_carga::pub_cargo(void) {
 
+    sem_wait(&this->arive_sem);
+
+    
     m.lock();
 
     Carga cargo = _load.front();
 
-    m.unlock();
-
     _load.pop();
+
+    m.unlock();
 
     // espera ter as vagas necessárias para adicionar na espera
     for(int i=0;i<cargo.get_type();i++) {

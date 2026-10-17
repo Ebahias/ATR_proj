@@ -20,6 +20,18 @@ void Zona_recarga_receive_robot_thread(void* arg) {
 
 void init_recarga_thread(Zona_recarga* zona, Node** grafo, int grafo_size) {
 
-    p
+    pthread_t thread;
+
+    Zona_recarga_arg_t zona_arg = {0};
+
+    zona_arg.zona = zona;
+    zona_arg.grafo = grafo;
+    zona_arg.grafo_size = grafo_size;
+
+    pthread_create( &thread,
+                    NULL,
+                    Zona_recarga_receive_robot_thread,
+                    &zona_arg);
+    
     return 
 }
