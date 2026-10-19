@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.." || exit 1
 LOGS=run/teste_gestor
 FIFO=$LOGS/novo_robo.fifo
 mkdir -p "$LOGS"
-rm -f "$LOGS"/*.log "$FIFO" /dev/mqueue/atr_gestor_organizador
+rm -f "$LOGS"/*.log "$FIFO" /dev/mqueue/atr_* /dev/shm/atr_frota
 
 falhas=0
 ok()    { echo "  [OK]    $1"; }
@@ -40,7 +40,7 @@ espera_log $LOGS/escuta.log "ROBO_NOVO" 3 \
     && ok "Organizador recebeu 3 eventos ROBO_NOVO" || falha "eventos ROBO_NOVO"
 grep -q "ROBO_NOVO robo=2 pid=[0-9]* pos=(10, 20)" $LOGS/escuta.log \
     && ok "posição arbitrária repassada" || falha "posição do robô 2"
-grep -q "ROBO_NOVO robo=1 pid=[0-9]* pos=(0, 0)" $LOGS/escuta.log \
+grep -q "ROBO_NOVO robo=1 pid=[0-9]* pos=(100, 30)" $LOGS/escuta.log \
     && ok "posição fixa padrão" || falha "posição padrão do robô 1"
 [ "$(pgrep -P $PID_GESTOR | wc -l)" -eq 3 ] \
     && ok "3 processos filhos do Gestor" || falha "número de processos filhos"

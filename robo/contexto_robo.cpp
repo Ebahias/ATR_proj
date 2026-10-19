@@ -18,6 +18,11 @@ ContextoRobo::ContextoRobo(int id, int slot, ShmFrota* shm, HardwareRobo* hw, mq
     _forcado_x = 0;
     _forcado_y = 0;
     _distancia_total = 0.0;
+    _nav.fase = FASE_NENHUMA;
+    _nav.tarefa_id = 0;
+    _nav.progresso = 0;
+    _nav.passagem = -1;
+    _nav.aguardando_passagem = -1;
 
     pthread_mutex_init(&_mtx, NULL);
 }
@@ -58,6 +63,7 @@ InstantaneoRobo ContextoRobo::instantaneo(void) {
     i.forcado_x = _forcado_x;
     i.forcado_y = _forcado_y;
     i.distancia_total = _distancia_total;
+    i.nav = _nav;
 
     pthread_mutex_unlock(&_mtx);
 
@@ -73,6 +79,8 @@ int ContextoRobo::estado(void) {
     return e;
 }
 
+static void registrar_mudanca(ContextoRobo* ctx, int antigo, int novo, const char* motivo);
+
 void ContextoRobo::mudar_estado(int novo, const char* motivo) {
 
     pthread_mutex_lock(&_mtx);
@@ -80,8 +88,31 @@ void ContextoRobo::mudar_estado(int novo, const char* motivo) {
     _estado = novo;
     pthread_mutex_unlock(&_mtx);
 
+    registrar_mudanca(this, antigo, novo, motivo);
+}
+
+bool ContextoRobo::mudar_estado_operacional(int novo, const char* motivo) {
+
+    pthread_mutex_lock(&_mtx);
+    int antigo = _estado;
+    bool pode = (antigo != ESTADO_DEFEITO && antigo != ESTADO_RECARREGANDO);
+    if(pode)
+        _estado = novo;
+    pthread_mutex_unlock(&_mtx);
+
+    if(pode)
+        registrar_mudanca(this, antigo, novo, motivo);
+
+    return pode;
+}
+
+static void registrar_mudanca(ContextoRobo* ctx, int antigo, int novo, const char* motivo) {
+
     if(antigo == novo)
         return;
+
+    ShmFrota* shm = ctx->shm;
+    int id = ctx->id;
 
     // Evento fora do mutex do contexto: nada é feito com dois locks ao mesmo tempo
     shm_evento_publicar(shm, id, EV_ESTADO, "%s -> %s (%s)",
@@ -141,6 +172,13 @@ void ContextoRobo::liberar_destino_forcado(void) {
 
     pthread_mutex_lock(&_mtx);
     _tem_destino_forcado = false;
+    pthread_mutex_unlock(&_mtx);
+}
+
+void ContextoRobo::publicar_navegacao(const InfoNavegacao& info) {
+
+    pthread_mutex_lock(&_mtx);
+    _nav = info;
     pthread_mutex_unlock(&_mtx);
 }
 

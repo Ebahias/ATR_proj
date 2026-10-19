@@ -29,6 +29,21 @@ const char* modo_robo_nome(int modo) {
     return modo == MODO_MANUAL ? "manual" : "automático";
 }
 
+const char* fase_tarefa_nome(int fase) {
+
+    switch(fase) {
+        case FASE_NENHUMA:           return "-";
+        case FASE_IR_COLETA:         return "ir_coleta";
+        case FASE_AGUARDANDO_EQUIPE: return "aguardando_equipe";
+        case FASE_ACOPLANDO:         return "acoplando";
+        case FASE_TRANSPORTANDO:     return "transportando";
+        case FASE_ENTREGANDO:        return "entregando";
+        case FASE_CONCLUIDA:         return "concluida";
+        case FASE_FALHOU:            return "falhou";
+        default:                     return "?";
+    }
+}
+
 const char* tipo_evento_robo_nome(int tipo) {
 
     switch(tipo) {
@@ -41,6 +56,8 @@ const char* tipo_evento_robo_nome(int tipo) {
         case EV_CARGA:          return "CARGA";
         case EV_DEFEITO:        return "DEFEITO";
         case EV_RECARGA:        return "RECARGA";
+        case EV_PASSAGEM:       return "PASSAGEM";
+        case EV_TAREFA:         return "TAREFA";
         default:                return "?";
     }
 }
@@ -53,6 +70,7 @@ const char* tipo_comando_nome(int tipo) {
         case CMD_MODO:             return "MODO";
         case CMD_ACOPLAR_E_ERGUER: return "ACOPLAR_E_ERGUER";
         case CMD_SOLTAR_CARGA:     return "SOLTAR_CARGA";
+        case CMD_TAREFA:           return "TAREFA";
         case CMD_SIM_FALHA:        return "SIM_FALHA";
         case CMD_SIM_BATERIA:      return "SIM_BATERIA";
         default:                   return "?";
@@ -156,6 +174,13 @@ ShmFrota* shm_frota_criar(void) {
     sem_init(&shm->eventos.vazios, 1, TAM_BUFFER_EVENTOS);   // pshared = 1
     sem_init(&shm->eventos.cheios, 1, 0);
 
+    shm->n_passagens = mapa_num_passagens();
+
+    for(int i=0;i<shm->n_passagens;i++) {
+        iniciar_mutex_compartilhado(&shm->passagens[i].mtx);
+        shm->passagens[i].capacidade = mapa_passagem(i).capacidade;
+    }
+
     shm->versao = SHM_FROTA_VERSAO;
     shm->tamanho = sizeof(ShmFrota);
 
@@ -190,10 +215,10 @@ int shm_lock(pthread_mutex_t* mtx) {
     int ret = pthread_mutex_lock(mtx);
 
     if(ret == EOWNERDEAD) {
-        // Um processo morreu segurando o mutex. Os dados protegidos são
-        // sobrescritos por inteiro a cada publicação, então basta recuperar.
+        // Um processo morreu segurando o mutex: recupera. Quem protege dados
+        // que podem ter ficado pela metade recebe 1 e repara.
         pthread_mutex_consistent(mtx);
-        ret = 0;
+        ret = 1;
     }
 
     return ret;
@@ -218,6 +243,8 @@ void shm_slot_ocupar(ShmFrota* shm, int slot, int robo_id, pid_t pid, int x, int
     s.d.pos_x = s.d.sp_x = x;
     s.d.pos_y = s.d.sp_y = y;
     s.d.bateria = 100;
+    s.d.passagem = -1;
+    s.d.aguardando_passagem = -1;
     clock_gettime(CLOCK_REALTIME, &s.d.atualizado_em);
 
     shm_unlock(&s.mtx);

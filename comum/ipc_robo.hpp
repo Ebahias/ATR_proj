@@ -2,6 +2,7 @@
 #define COMUM_IPC_ROBO_HPP
 
 #include "comum/ipc_gestor.hpp"
+#include "comum/mapa.hpp"
 
 #include <mqueue.h>
 #include <pthread.h>
@@ -25,6 +26,9 @@
  *     criada pelo Gestor antes do fork e removida quando o robô termina.
  *     O Organizador (ou o operador, via Organizador) envia; a thread de
  *     Comando de Navegação do robô consome.
+ *
+ *  3. Controle das passagens estreitas do mapa, também em SHM_FROTA
+ *     (comum/passagens.hpp).
  */
 
 
@@ -47,9 +51,23 @@ enum ModoRobo : int {
     MODO_MANUAL                 // setpoints vêm do operador
 };
 
+// Fases da tarefa de transporte executada pelo Comando de Navegação
+enum FaseTarefa : int {
+    FASE_NENHUMA = 0,
+    FASE_IR_COLETA,             // indo até o ponto de coleta na baia
+    FASE_AGUARDANDO_EQUIPE,     // na baia, esperando o Organizador liberar (ACOPLAR)
+    FASE_ACOPLANDO,             // erguendo a carga; espera a equipe toda atracar
+    FASE_TRANSPORTANDO,         // levando a carga junto com a equipe
+    FASE_ENTREGANDO,            // no destino; solta quando a equipe toda chegar
+    FASE_CONCLUIDA,
+    FASE_FALHOU                 // ex.: não há rota para a equipe
+};
+
 const char* estado_robo_nome(int estado);
 
 const char* modo_robo_nome(int modo);
+
+const char* fase_tarefa_nome(int fase);
 
 
 /* ------------------------------------------------------------------ */
@@ -58,7 +76,7 @@ const char* modo_robo_nome(int modo);
 
 #define SHM_FROTA           "/atr_frota"
 #define SHM_FROTA_MAGIC     0x46525441u     // "ATRF"
-#define SHM_FROTA_VERSAO    1
+#define SHM_FROTA_VERSAO    2
 
 struct DadosStatus {
     int ativo;
@@ -74,6 +92,11 @@ struct DadosStatus {
     int carga_atracada;
     int falha;
     double distancia_total;
+    int fase;                   // FaseTarefa
+    int tarefa_id;
+    int progresso;              // waypoints da rota de transporte já alcançados
+    int passagem;               // passagem estreita ocupada (-1 = nenhuma)
+    int aguardando_passagem;    // passagem em cuja fila está (-1 = nenhuma)
     uint32_t seq;               // incrementado a cada publicação
     struct timespec atualizado_em;
 };
@@ -100,7 +123,9 @@ enum TipoEventoRobo : int {
     EV_CHEGOU_DESTINO,
     EV_CARGA,                   // acoplou / soltou carga
     EV_DEFEITO,
-    EV_RECARGA
+    EV_RECARGA,
+    EV_PASSAGEM,                // aguardando / entrou / saiu de passagem estreita
+    EV_TAREFA                   // mudança de fase da tarefa de transporte
 };
 
 struct EventoRobo {
@@ -123,12 +148,36 @@ struct BufferEventos {
 const char* tipo_evento_robo_nome(int tipo);
 
 
+/* ------------------------------------------------------------------ */
+/* Memória compartilhada: passagens estreitas (comum/passagens.hpp)    */
+/* ------------------------------------------------------------------ */
+
+#define MAX_RESERVAS        4
+
+// Vagas guardadas para os membros de uma equipe que ainda vão entrar
+struct ReservaPassagem {
+    int equipe_id;              // tarefa_id da equipe (0 = reserva livre)
+    uint32_t pendentes;         // slots que ainda vão entrar
+};
+
+struct PassagemShm {
+    pthread_mutex_t mtx;        // PROCESS_SHARED + ROBUST
+    int capacidade;
+    uint32_t dentro;            // bit i = robô do slot i está na passagem
+    ReservaPassagem reservas[MAX_RESERVAS];
+    int n_fila;
+    int fila[MAX_ROBOS];        // slots esperando para entrar (FIFO)
+};
+
+
 struct ShmFrota {
     uint32_t magic;             // escrito por último na criação
     uint32_t versao;
     uint32_t tamanho;
     SlotStatus robos[MAX_ROBOS];
     BufferEventos eventos;
+    int n_passagens;
+    PassagemShm passagens[MAX_PASSAGENS];
 };
 
 // Cria (ou abre e valida, se já existir) a memória da frota. Usado pelo Gestor.
@@ -140,7 +189,8 @@ ShmFrota* shm_frota_abrir(void);
 void shm_frota_fechar(ShmFrota* shm);
 
 // Trava um mutex robusto. Se o dono morreu com ele travado (EOWNERDEAD),
-// marca como consistente e segue. Retorna 0 em sucesso.
+// marca como consistente e segue. Retorna 0 em sucesso, 1 se recuperou o
+// mutex de um processo morto (o chamador pode querer reparar os dados).
 int shm_lock(pthread_mutex_t* mtx);
 
 void shm_unlock(pthread_mutex_t* mtx);
@@ -176,11 +226,13 @@ int shm_evento_consumir(ShmFrota* shm, EventoRobo& evento, int timeout_ms);
 #define MQ_COMANDO_MAX_MSGS 10
 
 enum TipoComando : int {
-    CMD_IR_PARA = 1,            // x, y: novo destino
+    CMD_IR_PARA = 1,            // x, y: novo destino (cancela a tarefa atual)
     CMD_PARAR,                  // fica onde está
     CMD_MODO,                   // valor: ModoRobo
     CMD_ACOPLAR_E_ERGUER,       // o_acoplar_e_erguer = 1
     CMD_SOLTAR_CARGA,           // o_acoplar_e_erguer = 0
+    CMD_TAREFA,                 // transporte: coleta (x, y) -> entrega (x2, y2),
+                                // tarefa_id e equipe (máscara de slots)
 
     // Só na Etapa 1: fazem o papel da interface do simulador
     CMD_SIM_FALHA = 100,        // valor: 0/1
@@ -197,8 +249,11 @@ struct ComandoRobo {
     int origem;                 // OrigemComando
     int x;
     int y;
+    int x2;
+    int y2;
     int valor;
-    int tarefa_id;              // livre para o Organizador identificar a tarefa
+    int tarefa_id;              // identifica a tarefa (> 0 em CMD_TAREFA)
+    uint32_t equipe;            // CMD_TAREFA: bit i = robô do slot i na equipe (máx. 4)
     struct timespec timestamp;
 };
 

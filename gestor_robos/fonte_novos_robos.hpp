@@ -10,15 +10,16 @@
  *
  *     NOVO_ROBO <id> [<x> <y>]
  *
- * Sem posição, o robô nasce na posição fixa POS_INICIAL_X/Y. O mesmo formato
+ * Sem posição, o robô nasce na posição fixa POS_INICIAL_X/Y (estação de
+ * recarga 1 do mapa, comum/mapa.hpp). O mesmo formato
  * será usado como payload MQTT na Etapa 2 (tópico TOPICO_MQTT_NOVO_ROBO).
  */
 
 #define FIFO_NOVO_ROBO_PADRAO   "run/novo_robo.fifo"    // relativo ao diretório de execução
 #define TOPICO_MQTT_NOVO_ROBO   "atr/robos/novo"        // Etapa 2
 
-#define POS_INICIAL_X           0
-#define POS_INICIAL_Y           0
+#define POS_INICIAL_X           100
+#define POS_INICIAL_Y           30
 
 struct MsgNovoRobo {
     int id;

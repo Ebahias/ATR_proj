@@ -62,6 +62,11 @@ static void publicar(ContextoRobo* ctx, const LeituraHardware& l) {
     d.carga_atracada = l.carga_atracada;
     d.falha = l.falha;
     d.distancia_total = s.distancia_total;
+    d.fase = s.nav.fase;
+    d.tarefa_id = s.nav.tarefa_id;
+    d.progresso = s.nav.progresso;
+    d.passagem = s.nav.passagem;
+    d.aguardando_passagem = s.nav.aguardando_passagem;
 
     shm_slot_publicar(ctx->shm, ctx->slot, d);
 }

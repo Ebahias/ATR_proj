@@ -4,6 +4,9 @@
  *
  * Uso: comando_robo <id> <comando> [args] [--operador]
  *
+ *   tarefa <tarefa_id> <cx> <cy> <ex> <ey> [--equipe <id>,<id>,...]
+ *                   TAREFA: levar carga da coleta (cx, cy) até a entrega (ex, ey);
+ *                   --equipe lista os robôs da equipe (ids, incluindo este)
  *   ir <x> <y>      IR_PARA
  *   parar           PARAR
  *   auto | manual   troca de modo
@@ -24,13 +27,57 @@
 
 static void uso(const char* prog) {
     fprintf(stderr, "uso: %s <id> ir <x> <y> | parar | auto | manual | acoplar | soltar"
-                    " | falha <0|1> | bateria <0-100>  [--operador]\n", prog);
+                    " | falha <0|1> | bateria <0-100>"
+                    " | tarefa <tarefa_id> <cx> <cy> <ex> <ey> [--equipe <id>,...]  [--operador]\n", prog);
     exit(2);
+}
+
+// "1,2,3" (ids de robôs) -> máscara de slots, consultando a tabela de status
+static int resolver_equipe(const std::string& lista, uint32_t& mascara) {
+
+    ShmFrota* shm = shm_frota_abrir();
+
+    if(!shm)
+        return -1;
+
+    mascara = 0;
+    size_t ini = 0;
+
+    while(ini <= lista.size()) {
+
+        size_t fim = lista.find(',', ini);
+        if(fim == std::string::npos)
+            fim = lista.size();
+
+        int id = atoi(lista.substr(ini, fim - ini).c_str());
+        int slot = -1;
+
+        for(int s=0;s<MAX_ROBOS;s++) {
+            DadosStatus d;
+            shm_slot_ler(shm, s, d);
+            if(d.ativo && d.robo_id == id)
+                slot = s;
+        }
+
+        if(slot < 0) {
+            fprintf(stderr, "robô %d da equipe não está ativo\n", id);
+            shm_frota_fechar(shm);
+            return -1;
+        }
+
+        mascara |= 1u << slot;
+        ini = fim + 1;
+    }
+
+    shm_frota_fechar(shm);
+
+    return 0;
 }
 
 int main(int argc, char** argv) {
 
     std::vector<std::string> args;
+    std::string equipe;
     ComandoRobo cmd;
     memset(&cmd, 0, sizeof(cmd));
     cmd.origem = ORIGEM_ORGANIZADOR;
@@ -38,6 +85,8 @@ int main(int argc, char** argv) {
     for(int i=1;i<argc;i++) {
         if(strcmp(argv[i], "--operador") == 0)
             cmd.origem = ORIGEM_OPERADOR;
+        else if(strcmp(argv[i], "--equipe") == 0 && i + 1 < argc)
+            equipe = argv[++i];
         else
             args.push_back(argv[i]);
     }
@@ -74,6 +123,15 @@ int main(int argc, char** argv) {
     } else if(c == "bateria" && n == 1) {
         cmd.tipo = CMD_SIM_BATERIA;
         cmd.valor = atoi(args[2].c_str());
+    } else if(c == "tarefa" && n == 5) {
+        cmd.tipo = CMD_TAREFA;
+        cmd.tarefa_id = atoi(args[2].c_str());
+        cmd.x = atoi(args[3].c_str());
+        cmd.y = atoi(args[4].c_str());
+        cmd.x2 = atoi(args[5].c_str());
+        cmd.y2 = atoi(args[6].c_str());
+        if(!equipe.empty() && resolver_equipe(equipe, cmd.equipe) < 0)
+            return 1;
     } else {
         uso(argv[0]);
     }

@@ -7,7 +7,7 @@
 #define PERIODO_HARDWARE_MS     20      // física do hardware simulado (só Etapa 1)
 
 // Hardware simulado (unidades de mapa)
-#define VELOCIDADE_ROBO         20.0    // unidades por segundo
+#define VELOCIDADE_ROBO         40.0    // unidades por segundo (mapa: 200 x 120)
 #define DRENO_BATERIA_MOVENDO   0.5     // % por segundo
 #define DRENO_BATERIA_PARADO    0.05    // % por segundo
 #define TEMPO_ACOPLAR_S         0.5     // tempo entre o comando e i_carga_atracada

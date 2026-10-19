@@ -1,5 +1,6 @@
 #include "gestor_robos/gestor_robos.hpp"
 #include "comum/log.hpp"
+#include "comum/passagens.hpp"
 
 #include <cerrno>
 #include <csignal>
@@ -82,8 +83,10 @@ bool GestorRobos::iniciar(void) {
         return false;
 
     // Slots de uma execução anterior não valem mais: os robôs são filhos deste processo
-    for(int i=0;i<MAX_ROBOS;i++)
+    for(int i=0;i<MAX_ROBOS;i++) {
+        passagens_liberar_slot(_shm, i);
         shm_slot_liberar(_shm, i);
+    }
 
     if(!_fonte->iniciar())
         return false;
@@ -350,8 +353,9 @@ void GestorRobos::robo_terminou(pid_t pid, int status) {
     evento.status_saida = status;
     clock_gettime(CLOCK_REALTIME, &evento.timestamp);
 
-    // Libera os recursos de IPC do robô (mesmo se ele morreu com o mutex do
-    // slot travado: o mutex é robusto)
+    // Libera os recursos de IPC do robô (mesmo se ele morreu com um mutex
+    // travado: os mutexes são robustos), inclusive vagas em passagens estreitas
+    passagens_liberar_slot(_shm, slot);
     shm_slot_liberar(_shm, slot);
     mq_comando_remover(r.id);
 

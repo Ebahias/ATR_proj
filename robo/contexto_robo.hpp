@@ -13,9 +13,19 @@
  * Canais entre as duas threads (enunciado, itens 3 e 4):
  *  - Status -> Navegação: bloquear_movimento() (ex.: falha, içar carga) e
  *    forcar_destino() (ex.: bateria fraca, ir para a recarga);
- *  - Navegação -> Status: estado, modo e destino atuais, lidos por
- *    instantaneo() para publicar no buffer compartilhado.
+ *  - Navegação -> Status: estado, modo, destino e dados da navegação
+ *    (InfoNavegacao), lidos por instantaneo() para publicar no buffer
+ *    compartilhado.
  */
+
+// Dados da navegação publicados pelo Status (produzidos pelo Navegador)
+struct InfoNavegacao {
+    int fase;                   // FaseTarefa
+    int tarefa_id;
+    int progresso;
+    int passagem;
+    int aguardando_passagem;
+};
 
 struct InstantaneoRobo {
     int estado;
@@ -28,6 +38,7 @@ struct InstantaneoRobo {
     int forcado_x;
     int forcado_y;
     double distancia_total;
+    InfoNavegacao nav;
 };
 
 class ContextoRobo {
@@ -54,6 +65,8 @@ class ContextoRobo {
 
         double _distancia_total;
 
+        InfoNavegacao _nav;
+
     public:
 
         // Imutáveis depois da criação: podem ser lidos sem mutex
@@ -78,6 +91,11 @@ class ContextoRobo {
         // Muda o estado e registra o evento para o Coletor (se mudou).
         void mudar_estado(int novo, const char* motivo);
 
+        // Igual a mudar_estado(), mas não sai de DEFEITO nem de RECARREGANDO,
+        // que são decididos pela thread de Status. Teste e troca são atômicos.
+        // Retorna false se o estado não foi trocado por esse motivo.
+        bool mudar_estado_operacional(int novo, const char* motivo);
+
         int modo(void);
 
         void mudar_modo(int novo);
@@ -91,6 +109,8 @@ class ContextoRobo {
         void liberar_destino_forcado(void);
 
         void definir_distancia_total(double distancia);
+
+        void publicar_navegacao(const InfoNavegacao& info);
 };
 
 #endif
