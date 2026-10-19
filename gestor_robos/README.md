@@ -50,15 +50,18 @@ inscrita em `atr/robos/novo` e reaproveitar `parse_msg_novo_robo`.
 `/atr_gestor_organizador`. O Organizador consome com `mq_gestor_abrir_leitura()` +
 `mq_gestor_receber()` (exemplo em [ferramentas/escuta_gestor.cpp](../ferramentas/escuta_gestor.cpp)).
 
-**Processo do robô**: o Gestor executa `bin/robo <id> <x> <y>` e espera que ele
-termine com SIGTERM. Hoje `bin/robo` é um stub ([robo/robo_stub.cpp](../robo/robo_stub.cpp))
-até as tarefas 2–4 serem implementadas.
+**Processo do robô** ([robo/README.md](../robo/README.md)): o Gestor executa
+`bin/robo <id> <slot> <x> <y>` e espera que ele termine com SIGTERM. Antes do
+`fork`, o Gestor cria a memória da frota (`/atr_frota`), reserva o slot de status
+e cria a fila de comandos `/atr_robo_<id>_cmd`. Quando o robô termina, o Gestor
+libera os dois. Assim o Organizador pode mandar comandos assim que recebe o `ROBO_NOVO`.
 
 ## Compilar e testar
 
 ```sh
-make                 # gera bin/gestor_robos, bin/robo, bin/novo_robo, bin/escuta_gestor
+make                 # gera bin/gestor_robos, bin/robo e as ferramentas de teste
 make teste-gestor    # teste de integração (testes/teste_gestor.sh)
+make teste           # testes do Gestor e do robô
 ```
 
 Manualmente, em três terminais, a partir da raiz do projeto:
@@ -69,4 +72,4 @@ bin/gestor_robos
 bin/novo_robo 1 10 20         # faz o papel do simulador
 ```
 
-Se a fila ficar com eventos antigos de uma execução anterior: `rm /dev/mqueue/atr_gestor_organizador`.
+Para limpar o IPC de uma execução anterior: `rm -f /dev/mqueue/atr_* /dev/shm/atr_frota`.

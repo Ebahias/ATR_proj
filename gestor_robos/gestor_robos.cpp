@@ -36,6 +36,7 @@ GestorRobos::GestorRobos(FonteNovosRobos* fonte, const std::string& exe_robo) {
     this->_fonte = fonte;
     this->_exe_robo = exe_robo;
     this->_mq = (mqd_t)-1;
+    this->_shm = NULL;
     this->_threads_ativas = false;
     this->_n_ativos = 0;
     this->_encerrando = false;
@@ -55,6 +56,8 @@ GestorRobos::~GestorRobos() {
     if(_mq != (mqd_t)-1)
         mq_close(_mq);
 
+    shm_frota_fechar(_shm);
+
     pthread_cond_destroy(&_cv_sem_filhos);
     pthread_cond_destroy(&_cv_tem_filhos);
     pthread_mutex_destroy(&_mtx_envio);
@@ -72,6 +75,15 @@ bool GestorRobos::iniciar(void) {
 
     if(_mq == (mqd_t)-1)
         return false;
+
+    _shm = shm_frota_criar();
+
+    if(!_shm)
+        return false;
+
+    // Slots de uma execução anterior não valem mais: os robôs são filhos deste processo
+    for(int i=0;i<MAX_ROBOS;i++)
+        shm_slot_liberar(_shm, i);
 
     if(!_fonte->iniciar())
         return false;
@@ -151,12 +163,12 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
 
     // Argumentos montados antes do fork: entre fork e exec o filho de um
     // processo multithread só pode chamar funções async-signal-safe.
-    char arg_id[16], arg_x[16], arg_y[16];
+    char arg_id[16], arg_slot[16], arg_x[16], arg_y[16];
     snprintf(arg_id, sizeof(arg_id), "%d", msg.id);
     snprintf(arg_x, sizeof(arg_x), "%d", msg.x);
     snprintf(arg_y, sizeof(arg_y), "%d", msg.y);
 
-    char* const argv[] = { (char*)_exe_robo.c_str(), arg_id, arg_x, arg_y, NULL };
+    char* const argv[] = { (char*)_exe_robo.c_str(), arg_id, arg_slot, arg_x, arg_y, NULL };
 
     pid_t pid_gestor = getpid();
 
@@ -188,6 +200,18 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
         return -1;
     }
 
+    snprintf(arg_slot, sizeof(arg_slot), "%d", slot);
+
+    // Recursos de IPC do robô prontos antes de ele existir: o Organizador pode
+    // mandar comandos assim que receber o ROBO_NOVO, e o robô já encontra tudo.
+    if(mq_comando_criar(msg.id) < 0) {
+        pthread_mutex_unlock(&_mtx);
+        log_msg("GESTOR", "não foi possível criar a fila de comandos do robô %d", msg.id);
+        return -1;
+    }
+
+    shm_slot_ocupar(_shm, slot, msg.id, 0, msg.x, msg.y);
+
     // O fork acontece com _mtx travado: assim o filho é registrado na tabela
     // antes que a thread monitora possa recolhê-lo com waitpid().
     pid_t pid = fork();
@@ -210,6 +234,8 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
 
     if(pid < 0) {
         int erro = errno;
+        shm_slot_liberar(_shm, slot);
+        mq_comando_remover(msg.id);
         pthread_mutex_unlock(&_mtx);
         log_msg("GESTOR", "fork falhou para o robô %d: %s", msg.id, strerror(erro));
         return -1;
@@ -223,6 +249,8 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
     r.pos_y = msg.y;
     clock_gettime(CLOCK_REALTIME, &r.criado_em);
 
+    shm_slot_definir_pid(_shm, slot, pid);
+
     _n_ativos++;
     int n_ativos = _n_ativos;
 
@@ -230,6 +258,7 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
     memset(&evento, 0, sizeof(evento));
     evento.tipo = EVENTO_ROBO_NOVO;
     evento.robo_id = r.id;
+    evento.slot = slot;
     evento.pid = r.pid;
     evento.pos_x = r.pos_x;
     evento.pos_y = r.pos_y;
@@ -316,9 +345,15 @@ void GestorRobos::robo_terminou(pid_t pid, int status) {
     memset(&evento, 0, sizeof(evento));
     evento.tipo = EVENTO_ROBO_REMOVIDO;
     evento.robo_id = r.id;
+    evento.slot = slot;
     evento.pid = pid;
     evento.status_saida = status;
     clock_gettime(CLOCK_REALTIME, &evento.timestamp);
+
+    // Libera os recursos de IPC do robô (mesmo se ele morreu com o mutex do
+    // slot travado: o mutex é robusto)
+    shm_slot_liberar(_shm, slot);
+    mq_comando_remover(r.id);
 
     r.ativo = false;
     _n_ativos--;

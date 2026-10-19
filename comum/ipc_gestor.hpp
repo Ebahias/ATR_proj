@@ -26,6 +26,7 @@ enum TipoEventoGestor : int {
 struct EventoGestor {
     int tipo;                   // TipoEventoGestor
     int robo_id;
+    int slot;                   // posição do robô na tabela de status (comum/ipc_robo.hpp)
     pid_t pid;                  // processo que gerencia o robô
     int pos_x;                  // posição inicial (EVENTO_ROBO_NOVO)
     int pos_y;

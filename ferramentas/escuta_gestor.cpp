@@ -23,14 +23,15 @@ int main(void) {
     while(mq_gestor_receber(mq, ev) == 0) {
 
         if(ev.tipo == EVENTO_ROBO_NOVO) {
-            log_msg("ESCUTA", "%s robo=%d pid=%d pos=(%d, %d) t=%ld.%09ld",
-                    evento_gestor_nome(ev.tipo), ev.robo_id, ev.pid, ev.pos_x, ev.pos_y,
+            log_msg("ESCUTA", "%s robo=%d pid=%d pos=(%d, %d) slot=%d t=%ld.%09ld",
+                    evento_gestor_nome(ev.tipo), ev.robo_id, ev.pid, ev.pos_x, ev.pos_y, ev.slot,
                     (long)ev.timestamp.tv_sec, ev.timestamp.tv_nsec);
         } else {
-            log_msg("ESCUTA", "%s robo=%d pid=%d %s=%d t=%ld.%09ld",
+            log_msg("ESCUTA", "%s robo=%d pid=%d %s=%d slot=%d t=%ld.%09ld",
                     evento_gestor_nome(ev.tipo), ev.robo_id, ev.pid,
                     WIFSIGNALED(ev.status_saida) ? "sinal" : "codigo",
                     WIFSIGNALED(ev.status_saida) ? WTERMSIG(ev.status_saida) : WEXITSTATUS(ev.status_saida),
+                    ev.slot,
                     (long)ev.timestamp.tv_sec, ev.timestamp.tv_nsec);
         }
     }

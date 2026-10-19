@@ -2,6 +2,7 @@
 #define GESTOR_ROBOS_HPP
 
 #include "comum/ipc_gestor.hpp"
+#include "comum/ipc_robo.hpp"
 #include "gestor_robos/fonte_novos_robos.hpp"
 
 #include <pthread.h>
@@ -16,6 +17,10 @@
  *    libera a vaga na tabela;
  *  - ambas avisam o Organizador da Logística, de forma assíncrona, pela fila
  *    POSIX MQ_GESTOR_ORGANIZADOR.
+ *
+ * O Gestor também é dono do ciclo de vida dos recursos de IPC de cada robô:
+ * cria a memória da frota (SHM_FROTA), reserva o slot de status e cria a
+ * fila de comandos do robô antes do fork, e libera ambos quando o robô termina.
  */
 
 struct RegistroRobo {
@@ -36,6 +41,8 @@ class GestorRobos {
         std::string _exe_robo;
 
         mqd_t _mq;
+
+        ShmFrota* _shm;
 
         pthread_t _th_receptor;
 
