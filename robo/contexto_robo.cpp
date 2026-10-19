@@ -23,6 +23,7 @@ ContextoRobo::ContextoRobo(int id, int slot, ShmFrota* shm, HardwareRobo* hw, mq
     _nav.progresso = 0;
     _nav.passagem = -1;
     _nav.aguardando_passagem = -1;
+    _nav.estado_desejado = ESTADO_DISPONIVEL;
 
     pthread_mutex_init(&_mtx, NULL);
 }

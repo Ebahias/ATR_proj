@@ -68,6 +68,15 @@ static const AreaMapa AREAS[] = {
 
 #define NUM_AREAS ((int)(sizeof(AREAS) / sizeof(AREAS[0])))
 
+static const VagaRecargaMapa VAGAS_RECARGA[] = {
+    {1,  94, 30}, {1, 100, 30}, {1, 106, 30},
+    {2,  94, 90}, {2, 100, 90}, {2, 106, 90},
+};
+
+#define NUM_VAGAS_RECARGA ((int)(sizeof(VAGAS_RECARGA) / sizeof(VAGAS_RECARGA[0])))
+
+static_assert(NUM_VAGAS_RECARGA <= MAX_VAGAS_RECARGA, "aumente MAX_VAGAS_RECARGA");
+
 
 int mapa_num_nos(void)                  { return NUM_NOS; }
 const NoMapa& mapa_no(int i)            { return NOS[i]; }
@@ -77,6 +86,8 @@ int mapa_num_passagens(void)            { return NUM_PASSAGENS; }
 const PassagemMapa& mapa_passagem(int i){ return PASSAGENS[i]; }
 int mapa_num_areas(void)                { return NUM_AREAS; }
 const AreaMapa& mapa_area(int i)        { return AREAS[i]; }
+int mapa_num_vagas_recarga(void)        { return NUM_VAGAS_RECARGA; }
+const VagaRecargaMapa& mapa_vaga_recarga(int i) { return VAGAS_RECARGA[i]; }
 
 const AreaMapa* mapa_buscar_area(TipoArea tipo, int numero) {
 

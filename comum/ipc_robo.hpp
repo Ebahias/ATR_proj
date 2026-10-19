@@ -27,8 +27,8 @@
  *     O Organizador (ou o operador, via Organizador) envia; a thread de
  *     Comando de Navegação do robô consome.
  *
- *  3. Controle das passagens estreitas do mapa, também em SHM_FROTA
- *     (comum/passagens.hpp).
+ *  3. Controle das passagens estreitas do mapa e das vagas das estações de
+ *     recarga, também em SHM_FROTA (comum/passagens.hpp, comum/recarga.hpp).
  */
 
 
@@ -76,7 +76,7 @@ const char* fase_tarefa_nome(int fase);
 
 #define SHM_FROTA           "/atr_frota"
 #define SHM_FROTA_MAGIC     0x46525441u     // "ATRF"
-#define SHM_FROTA_VERSAO    2
+#define SHM_FROTA_VERSAO    3
 
 struct DadosStatus {
     int ativo;
@@ -170,6 +170,17 @@ struct PassagemShm {
 };
 
 
+/* ------------------------------------------------------------------ */
+/* Memória compartilhada: vagas de recarga (comum/recarga.hpp)         */
+/* ------------------------------------------------------------------ */
+
+struct RecargaShm {
+    pthread_mutex_t mtx;        // PROCESS_SHARED + ROBUST
+    int n_vagas;
+    int ocupante[MAX_VAGAS_RECARGA];    // slot do robô que reservou, -1 se livre
+};
+
+
 struct ShmFrota {
     uint32_t magic;             // escrito por último na criação
     uint32_t versao;
@@ -178,6 +189,7 @@ struct ShmFrota {
     BufferEventos eventos;
     int n_passagens;
     PassagemShm passagens[MAX_PASSAGENS];
+    RecargaShm recarga;
 };
 
 // Cria (ou abre e valida, se já existir) a memória da frota. Usado pelo Gestor.

@@ -5,11 +5,13 @@
  *
  * Uso: monitor_frota status     imprime a tabela de status uma vez
  *      monitor_frota passagens  imprime a ocupação das passagens estreitas uma vez
+ *      monitor_frota recarga    imprime as vagas das estações de recarga uma vez
  *      monitor_frota eventos    consome e imprime eventos até SIGINT/SIGTERM
  */
 
 #include "comum/ipc_robo.hpp"
 #include "comum/passagens.hpp"
+#include "comum/recarga.hpp"
 
 #include <csignal>
 #include <cstdio>
@@ -93,6 +95,29 @@ static int imprimir_passagens(ShmFrota* shm) {
     return 0;
 }
 
+// Uma linha por vaga: "V<n> recarga=<r> pos=(<x>,<y>) robo=<id ou ->"
+static int imprimir_recarga(ShmFrota* shm) {
+
+    RecargaShm r;
+    recarga_ler(shm, r);
+
+    for(int i=0;i<r.n_vagas;i++) {
+
+        const VagaRecargaMapa& v = mapa_vaga_recarga(i);
+        std::string robo = "-";
+
+        if(r.ocupante[i] >= 0) {
+            DadosStatus d;
+            shm_slot_ler(shm, r.ocupante[i], d);
+            robo = std::to_string(d.robo_id);
+        }
+
+        printf("V%d recarga=%d pos=(%d,%d) robo=%s\n", i, v.recarga, v.x, v.y, robo.c_str());
+    }
+
+    return 0;
+}
+
 static int consumir_eventos(ShmFrota* shm) {
 
     signal(SIGINT, ao_sinal);
@@ -119,8 +144,8 @@ static int consumir_eventos(ShmFrota* shm) {
 int main(int argc, char** argv) {
 
     if(argc != 2 || (strcmp(argv[1], "status") != 0 && strcmp(argv[1], "eventos") != 0
-                     && strcmp(argv[1], "passagens") != 0)) {
-        fprintf(stderr, "uso: %s status | passagens | eventos\n", argv[0]);
+                     && strcmp(argv[1], "passagens") != 0 && strcmp(argv[1], "recarga") != 0)) {
+        fprintf(stderr, "uso: %s status | passagens | recarga | eventos\n", argv[0]);
         return 2;
     }
 
@@ -135,6 +160,8 @@ int main(int argc, char** argv) {
         ret = imprimir_status(shm);
     else if(strcmp(argv[1], "passagens") == 0)
         ret = imprimir_passagens(shm);
+    else if(strcmp(argv[1], "recarga") == 0)
+        ret = imprimir_recarga(shm);
     else
         ret = consumir_eventos(shm);
 

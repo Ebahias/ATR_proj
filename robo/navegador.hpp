@@ -64,6 +64,8 @@ class Navegador {
         int _progresso;
         bool _soltou;
 
+        bool _acoplado_manual;      // ACOPLAR sem tarefa (operação manual)
+
         bool rota_para(int x, int y, bool sincronizar);
 
         bool planejar(int x, int y, bool sincronizar);

@@ -1,6 +1,7 @@
 #include "robo/hardware_robo.hpp"
 #include "robo/config_robo.hpp"
 #include "comum/periodico.hpp"
+#include "comum/mapa.hpp"
 
 #include <cmath>
 
@@ -107,8 +108,17 @@ void HardwareSimulado::passo(double dt) {
 
     _bateria -= (moveu ? DRENO_BATERIA_MOVENDO : DRENO_BATERIA_PARADO) * dt;
 
+    // Parado numa estação de recarga: carrega (o simulador conhece o mapa)
+    const AreaMapa* area = mapa_area_do_ponto((int)std::lround(_x), (int)std::lround(_y));
+
+    if(!moveu && !_falha && area && area->tipo == AREA_RECARGA)
+        _bateria += TAXA_RECARGA * dt;
+
     if(_bateria < 0.0)
         _bateria = 0.0;
+
+    if(_bateria > 100.0)
+        _bateria = 100.0;
 
     if(_acoplar && !_atracada && !_falha) {
         _t_acoplando += dt;

@@ -47,6 +47,13 @@ static void exportar_json(void) {
                i + 1 < mapa_num_areas() ? "," : "");
     }
 
+    printf("  ],\n  \"vagas_recarga\": [\n");
+    for(int i=0;i<mapa_num_vagas_recarga();i++) {
+        const VagaRecargaMapa& v = mapa_vaga_recarga(i);
+        printf("    {\"id\": %d, \"recarga\": %d, \"x\": %d, \"y\": %d}%s\n",
+               i, v.recarga, v.x, v.y, i + 1 < mapa_num_vagas_recarga() ? "," : "");
+    }
+
     printf("  ]\n}\n");
 }
 

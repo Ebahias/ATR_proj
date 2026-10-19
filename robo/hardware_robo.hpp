@@ -47,7 +47,8 @@ class HardwareRobo {
 
 /*
  * Hardware simulado: uma thread periódica move o robô em linha reta até o
- * setpoint, descarrega a bateria e simula o tempo de acoplamento.
+ * setpoint, descarrega a bateria (e carrega, se parado numa estação de
+ * recarga) e simula o tempo de acoplamento.
  */
 class HardwareSimulado : public HardwareRobo {
 

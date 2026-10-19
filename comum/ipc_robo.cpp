@@ -181,6 +181,12 @@ ShmFrota* shm_frota_criar(void) {
         shm->passagens[i].capacidade = mapa_passagem(i).capacidade;
     }
 
+    iniciar_mutex_compartilhado(&shm->recarga.mtx);
+    shm->recarga.n_vagas = mapa_num_vagas_recarga();
+
+    for(int i=0;i<MAX_VAGAS_RECARGA;i++)
+        shm->recarga.ocupante[i] = -1;
+
     shm->versao = SHM_FROTA_VERSAO;
     shm->tamanho = sizeof(ShmFrota);
 

@@ -25,7 +25,7 @@ Cada robô é um processo (`bin/robo <id> <slot> <x> <y>`) criado pelo Gestor de
 |---|---|---|
 | principal | – | `sigwait(SIGINT/SIGTERM)` e encerramento ordenado (join de todas) |
 | Navegação ([navegacao.cpp](navegacao.cpp), [navegador.cpp](navegador.cpp)) | 50 ms | Comandos da fila, rota pelo mapa, passagens estreitas, tarefa de transporte |
-| Status ([status.cpp](status.cpp)) | 100 ms | Lê o hardware, avalia condições, publica o status na memória compartilhada |
+| Status ([status.cpp](status.cpp)) | 100 ms | Lê o hardware; trata defeito, bateria/recarga e distância; publica o status na memória compartilhada |
 | Física ([hardware_robo.cpp](hardware_robo.cpp)) | 20 ms | Simula o hardware (só na Etapa 1; na Etapa 2 vira o cliente MQTT) |
 
 As threads periódicas usam `Periodo` ([comum/periodico.hpp](../comum/periodico.hpp)):
@@ -40,6 +40,8 @@ servem para a análise de escalonabilidade da Etapa 2.
 | Organizador → robô | Fila POSIX `/atr_robo_<id>_cmd` | Criada e removida pelo Gestor. O robô lê sem bloquear (`O_NONBLOCK`) a cada ciclo. O Organizador envia sem bloquear: fila cheia gera `EAGAIN`, nunca trava. |
 | Robô → Organizador | Memória compartilhada `/atr_frota`, tabela `robos[MAX_ROBOS]` | Um mutex por slot, `PTHREAD_PROCESS_SHARED` + `PTHREAD_MUTEX_ROBUST`. Se um robô morre com o lock, o próximo `lock` recebe `EOWNERDEAD` e recupera. |
 | Robôs → Coletor | Buffer circular em `/atr_frota` | Produtor/consumidor com semáforos `vazios`/`cheios` (`sem_init` com `pshared=1`) + mutex robusto. O produtor usa `sem_trywait`: um robô nunca bloqueia esperando o Coletor; com buffer cheio, o evento é descartado e contado. |
+| Vagas de recarga | Monitor em `/atr_frota` ([comum/recarga.hpp](../comum/recarga.hpp)) | Mutex robusto + dono de cada vaga; reserva sem bloquear; o Gestor libera a vaga de um robô morto. |
+| Passagens estreitas | Monitor em `/atr_frota` ([comum/passagens.hpp](../comum/passagens.hpp)) | Ver "Comando de Navegação". |
 | Navegação ↔ Status | `ContextoRobo` ([contexto_robo.hpp](contexto_robo.hpp)) | Mutex do processo. O Status bloqueia o movimento ou força um destino; a Navegação define estado, modo e destino. |
 | Threads ↔ hardware | `HardwareRobo` | Mutex interno. As threads só conhecem a interface (Tabela 1). |
 
@@ -120,20 +122,43 @@ destino forçado (ex.: recarga) tem prioridade sobre a tarefa, que continua depo
 A navegação nunca tira o robô dos estados `defeito`/`recarregando`, que são
 decididos pelo Status.
 
-## O que fica para a tarefa 4
+## Status do Robô (tarefa 4)
 
-Em `status.cpp`, `avaliar_condicoes` (marcado com `TODO tarefa 4`):
-- falha → `DEFEITO` + `bloquear_movimento(true)`;
-- bateria baixa → `forcar_destino()` para a recarga (área `Recarga 1/2` do mapa) + `RECARREGANDO`;
-- distância total percorrida.
+A cada 100 ms, a thread de Status lê o hardware, avalia as condições abaixo e
+publica o status na memória compartilhada.
 
-A navegação já obedece a esses sinais.
+| Condição | Reação |
+|---|---|
+| `i_falha` ou bateria 0% | Estado `defeito`, `bloquear_movimento(true)` (a navegação para e sai das filas) e evento "defeito presente". Comandos de movimento são recusados. Quando o defeito some, o robô retoma o que fazia. |
+| Bateria ≤ 20% | Estado `recarregando` (indisponível). Reserva a **vaga de recarga** livre mais próxima e força a navegação até ela. Sem vaga livre, espera na entrada da estação mais próxima e tenta de novo a cada ciclo. |
+| Na vaga, bateria ≥ 95% | Libera a vaga e o destino forçado, e o robô retoma o que fazia (inclusive um comando recebido durante a recarga). Os limites de 20% e 95% formam uma histerese, para o robô não oscilar entre recarregar e sair. |
+| Bateria baixa carregando caixa | Recarga **adiada** até a entrega: o robô não abandona a equipe no meio do transporte. |
+| Bateria baixa em modo manual | Só avisa (evento). Quem decide é o operador. |
+| Sempre | Acumula a **distância total percorrida** (publicada em `distancia_total`). |
+
+Ao sair de um defeito ou de uma recarga, o estado volta para o que a navegação
+quer agora (`InfoNavegacao::estado_desejado`), e não para uma cópia antiga. A
+navegação, por sua vez, nunca tira o robô de `defeito`/`recarregando`
+(`mudar_estado_operacional`).
+
+**Vagas de recarga** ([comum/recarga.hpp](../comum/recarga.hpp)): há 3 vagas na
+Recarga 1 e 3 na Recarga 2. Como são um recurso disputado por vários processos,
+usamos outro monitor na memória compartilhada, com mutex robusto e o dono de cada
+vaga registrado. A reserva nunca bloqueia, e o Gestor devolve a vaga de um robô
+que morreu. No simulador da Etapa 1, a bateria carrega quando o robô está parado
+numa área de recarga.
+
+Eventos para o Coletor: "defeito presente: falha no hardware", "defeito
+removido", "bateria 15%: indo para Recarga 2", "em recarga na Recarga 2",
+"recarga concluída (bateria 96%)", "recarga adiada até entregar a carga".
 
 ## Testar
 
 ```sh
 make teste-robo         # processo do robô (tarefa 2)
 make teste-navegacao    # rotas, passagens e transporte em equipe (tarefa 3)
+make teste-status       # defeito, bateria/recarga e distância (tarefa 4)
+make teste              # todos
 ```
 
 Ou manualmente, a partir da raiz do projeto:
@@ -154,4 +179,9 @@ bin/comando_robo 3 tarefa 42 18 75 188 75 --equipe 2,3
 bin/monitor_frota status             # esperar fase aguardando_equipe nos dois
 bin/comando_robo 2 acoplar && bin/comando_robo 3 acoplar
 bin/monitor_frota passagens          # ocupação das passagens estreitas
+
+# Bateria e defeito (no lugar do simulador)
+bin/comando_robo 2 bateria 15        # vai recarregar
+bin/monitor_frota recarga            # vagas de recarga
+bin/comando_robo 3 falha 1           # defeito: para e recusa movimento
 ```

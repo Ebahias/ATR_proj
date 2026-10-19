@@ -8,7 +8,7 @@ BUILD := build
 
 # Gestor de Robôs (tarefa 1)
 # Módulos comuns de IPC (memória da frota, passagens estreitas, mapa)
-IPC_ROBO := comum/ipc_robo.cpp comum/passagens.cpp comum/mapa.cpp
+IPC_ROBO := comum/ipc_robo.cpp comum/passagens.cpp comum/recarga.cpp comum/mapa.cpp
 
 GESTOR_SRC := gestor_robos/main.cpp gestor_robos/gestor_robos.cpp \
               gestor_robos/fonte_novos_robos.cpp comum/ipc_gestor.cpp $(IPC_ROBO)
@@ -29,7 +29,7 @@ PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gest
 
 obj = $(patsubst %.cpp,$(BUILD)/%.o,$(1))
 
-.PHONY: all clean teste teste-gestor teste-robo teste-navegacao
+.PHONY: all clean teste teste-gestor teste-robo teste-navegacao teste-status
 
 all: $(PROGRAMAS)
 
@@ -49,7 +49,7 @@ $(BUILD)/%.o: %.cpp
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-teste: teste-gestor teste-robo teste-navegacao
+teste: teste-gestor teste-robo teste-navegacao teste-status
 
 teste-gestor: all
 	./testes/teste_gestor.sh
@@ -59,6 +59,9 @@ teste-robo: all
 
 teste-navegacao: all
 	./testes/teste_navegacao.sh
+
+teste-status: all
+	./testes/teste_status.sh
 
 clean:
 	rm -rf $(BIN) $(BUILD)

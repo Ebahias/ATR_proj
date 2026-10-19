@@ -12,12 +12,12 @@
  *  x:  0      30  50  70        100       130  150  170     200
  *   15 |Baia 1| B1--W1---------- N ----------------E1--ZA |Zona A|
  *      |      |     |            |                  |      |      |
- *   30 |      |     |            R1 (recarga 1)     |      |      |
+ *   30 |      |     |        R1 (recarga 1, 3 vagas) |      |      |
  *   45 |Baia 2| B2--W2--P0a ==[cap 1]== P0b--------E2--ZB |Zona B|
  *      |      |     ‖ [cap 3]                       |      |      |
  *   75 |Baia 3| B3--W3--P1a ==[cap 2]== P1b--------E3--ZC |Zona C|
  *      |      |     |                               |      |      |
- *   90 |      |     |            R2 (recarga 2)     |      |      |
+ *   90 |      |     |        R2 (recarga 2, 3 vagas) |      |      |
  *  105 |Baia 4| B4--W4---------- S ----------------E4--ZD |Zona D|
  *
  * Os corredores norte (y=15), sul (y=105) e leste (x=150) são largos, então
@@ -28,6 +28,8 @@
 #define MAPA_ALTURA     120
 
 #define MAX_PASSAGENS   8
+
+#define MAX_VAGAS_RECARGA   8
 
 struct NoMapa {
     const char* nome;
@@ -63,6 +65,13 @@ struct AreaMapa {
     int cx, cy;                 // centro (ponto padrão de coleta/entrega)
 };
 
+// Vaga (ponto de encaixe) de uma estação de recarga
+struct VagaRecargaMapa {
+    int recarga;                // número da área de recarga
+    int x;
+    int y;
+};
+
 // Ponto da rota. "passagem" é a passagem estreita atravessada para chegar a
 // este ponto a partir do anterior (-1 se o trecho é livre).
 struct Waypoint {
@@ -82,6 +91,9 @@ const PassagemMapa& mapa_passagem(int i);
 
 int mapa_num_areas(void);
 const AreaMapa& mapa_area(int i);
+
+int mapa_num_vagas_recarga(void);
+const VagaRecargaMapa& mapa_vaga_recarga(int i);
 
 // Área do tipo/número pedido, ou NULL.
 const AreaMapa* mapa_buscar_area(TipoArea tipo, int numero);

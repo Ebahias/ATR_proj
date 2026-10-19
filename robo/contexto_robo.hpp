@@ -25,6 +25,8 @@ struct InfoNavegacao {
     int progresso;
     int passagem;
     int aguardando_passagem;
+    int estado_desejado;        // estado operacional que a navegação quer
+                                // (o Status volta para ele após defeito/recarga)
 };
 
 struct InstantaneoRobo {

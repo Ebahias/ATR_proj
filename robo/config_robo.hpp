@@ -11,5 +11,10 @@
 #define DRENO_BATERIA_MOVENDO   0.5     // % por segundo
 #define DRENO_BATERIA_PARADO    0.05    // % por segundo
 #define TEMPO_ACOPLAR_S         0.5     // tempo entre o comando e i_carga_atracada
+#define TAXA_RECARGA            20.0    // % por segundo, parado numa área de recarga
+
+// Status do Robô (tarefa 4)
+#define BATERIA_MINIMA          20      // % : abaixo disso, vai recarregar
+#define BATERIA_RECARREGADA     95      // % : recarga concluída (histerese)
 
 #endif

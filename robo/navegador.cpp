@@ -29,6 +29,7 @@ Navegador::Navegador(ContextoRobo* ctx) {
     _equipe = 0;
     _progresso = 0;
     _soltou = false;
+    _acoplado_manual = false;
 }
 
 const char* Navegador::nome_local(int x, int y, char* buf, size_t tam) {
@@ -55,6 +56,15 @@ void Navegador::publicar(void) {
     info.progresso = _progresso;
     info.passagem = _passagem;
     info.aguardando_passagem = _aguardando;
+
+    if(_fase == FASE_IR_COLETA)
+        info.estado_desejado = ESTADO_DESLOCANDO;
+    else if(tarefa_ativa() || _acoplado_manual)
+        info.estado_desejado = ESTADO_OPERANDO_CARGA;
+    else if(_tem_destino)
+        info.estado_desejado = ESTADO_DESLOCANDO;
+    else
+        info.estado_desejado = ESTADO_DISPONIVEL;
 
     _ctx->publicar_navegacao(info);
 }
@@ -317,6 +327,7 @@ void Navegador::acoplar(void) {
 
     // Sem tarefa (ex.: operação manual): comando direto ao hardware
     _ctx->hw->acoplar_e_erguer(true);
+    _acoplado_manual = true;
     _ctx->mudar_estado_operacional(ESTADO_OPERANDO_CARGA, "comando ACOPLAR_E_ERGUER");
 }
 
@@ -325,6 +336,7 @@ void Navegador::soltar(void) {
     cancelar_tarefa("comando SOLTAR_CARGA");
 
     _ctx->hw->acoplar_e_erguer(false);
+    _acoplado_manual = false;
     _ctx->mudar_estado_operacional(ESTADO_DISPONIVEL, "comando SOLTAR_CARGA");
 }
 

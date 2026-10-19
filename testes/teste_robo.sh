@@ -67,11 +67,13 @@ espera "robô 1 de volta ao automático" status_tem 1 "automático"
 
 echo "4. Hardware: falha, bateria, acoplamento"
 bin/comando_robo 2 falha 1
+espera "falha aparece no status" status_tem 2 "defeito .*(50,50) .* 1 "
 bin/comando_robo 2 ir 60 50
-espera "falha aparece no status" status_tem 2 "(50,50) *(60,50) .* 1 "
 sleep 0.5
-status_tem 2 "(50,50) *(60,50)" && ok "robô com falha não se move" || falha "robô com falha se moveu"
+status_tem 2 "(50,50) *(50,50)" && ok "robô com falha não aceita movimento" || falha "robô com falha se moveu"
 bin/comando_robo 2 falha 0
+espera "falha removida" status_tem 2 "disponível .*(50,50)"
+bin/comando_robo 2 ir 60 50
 espera "sem falha, robô volta a andar" status_tem 2 "(60,50) *(60,50)"
 bin/comando_robo 2 bateria 30
 espera "bateria 30% no status" status_tem 2 " 30% "
