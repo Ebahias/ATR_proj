@@ -53,14 +53,6 @@ void init_baia_carga_threads(Baia_carga_arg_t* Baia, Node** grafo, int grafo_siz
                     Baia_carga_load_thread,
                     &baia_arg);
     
-    pthread_create( &thread_process,
-                    NULL,
-                    Baia_carga_process_thread,
-                    &baia_arg);
-
-    pthread_create( &thread_consume,
-                    NULL,
-                    Baia_carga_consume_thread,
-                    &baia_arg);
+    
     return;
 }

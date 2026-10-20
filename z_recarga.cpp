@@ -16,17 +16,17 @@ Zona_recarga::Zona_recarga(int id, int rows, Node** nodes) {
 
 }
 
-int Zona_recarga::get_free_spot(void) {
+Node* Zona_recarga::get_free_spot(void) {
 
 
-    int ret = -1;
+    int ret = nullptr;
 
     m.lock();
 
     
     for(int i=0;i<_rows;i++) {
         if(!_node_ocupied[i])
-            ret = _node[i]->get_id();
+            ret = _node[i];
     }
 
     m.unlock();

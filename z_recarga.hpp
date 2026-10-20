@@ -34,7 +34,7 @@ class Zona_recarga {
 
         Zona_recarga(int id, int rows, Node** nodes);
 
-        int get_free_spot(void);
+        Node* get_free_spot(void);
         
         int reserve_spot(int node_id);
 

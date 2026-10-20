@@ -14,7 +14,7 @@ class Baia_descarga {
         int _id;
 
         bool _node_ocupied[MAX_BD_ROWS];
-
+        
         int _node_tab[MAX_BD_ROWS];
 
         int _qtd_node;
@@ -26,6 +26,8 @@ class Baia_descarga {
         std::queue<Carga> _load;
 
         sem_t bc_sem[4];
+
+        sem_t avb_sem;
 
         std::mutex m;
 
@@ -39,12 +41,15 @@ class Baia_descarga {
 
         int consume_cargo(void);
 
-        int receive_cargo(void);
+        Node* receive_cargo(int type);
 
         int pub_cargo(void);
 
+        Node* get_free_spot(void);
+
         Carga cargo_response_clear(void);
         
+        int free_node(Node* node);
 };
 
 #endif

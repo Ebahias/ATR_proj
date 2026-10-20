@@ -1,0 +1,97 @@
+<mxfile host="app.diagrams.net" agent="ChatGPT">
+  <diagram id="atr-revisada" name="Arquitetura ATR revisada">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1600" pageHeight="1150" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#17365D;" value="Arquitetura do Sistema de Gerenciamento e Simulação de Robôs Móveis Autônomos" vertex="1">
+          <mxGeometry height="50" width="1360" x="120" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="manager" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;spacing=10;" value="&lt;b&gt;Gestor de Robôs&lt;/b&gt;&lt;br&gt;C/C++&lt;br&gt;Identifica novos robôs&lt;br&gt;Cria um processo para cada robô&lt;br&gt;Notifica o Organizador" vertex="1">
+          <mxGeometry height="140" width="320" x="-370" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="organizer_area" parent="1" style="swimlane;html=1;startSize=36;rounded=1;horizontal=1;collapsible=0;fillColor=#EAF3F8;swimlaneFillColor=#F8FBFF;strokeColor=#6C9CC5;fontSize=16;fontStyle=1;dashed=1;" value="Organizador da Logística&amp;nbsp;" vertex="1">
+          <mxGeometry height="580" width="1080" x="100" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="org_thread" parent="organizer_area" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=14;spacing=10;" value="&lt;b&gt;organizador_de_logistica_thread&lt;/b&gt;&lt;br&gt;Thread coordenadora&lt;br&gt;Organiza tarefas e a sequência de execução" vertex="1">
+          <mxGeometry height="75" width="377.5" x="580" y="152" as="geometry" />
+        </mxCell>
+        <mxCell id="assign_thread" parent="organizer_area" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;spacing=10;" value="&lt;b&gt;robo_manager_assign_thread&lt;/b&gt;&lt;br&gt;Thread de atribuição&lt;br&gt;Seleciona/associa robôs às tarefas" vertex="1">
+          <mxGeometry height="105" width="325" x="606.25" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="robo_thread" parent="organizer_area" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;spacing=10;" value="&lt;b&gt;robo_thread&lt;/b&gt;&lt;br&gt;Thread de gestão dos robôs&lt;br&gt;Executa a etapa seguinte da sequência" vertex="1">
+          <mxGeometry height="105" width="325" x="606.25" y="428" as="geometry" />
+        </mxCell>
+        <mxCell id="e_assign_robo" edge="1" parent="organizer_area" source="assign_thread" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#00806A;fontSize=12;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="robo_thread" value="2. sequência de execução">
+          <mxGeometry relative="1" x="0.0417" y="-2" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="646.25" y="205" as="sourcePoint" />
+            <mxPoint x="776.25" y="285" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_org_assign" edge="1" parent="organizer_area" source="org_thread" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#00806A;fontSize=12;" target="assign_thread" value="1. aciona">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="load_thread" parent="organizer_area" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;spacing=8;" value="&lt;b&gt;carga_load_tread&lt;/b&gt;&lt;br&gt;Thread de carga&lt;br&gt;Gerencia a lógica de carregamento/liberação da carga" vertex="1">
+          <mxGeometry height="85" width="290" x="60" y="147" as="geometry" />
+        </mxCell>
+        <mxCell id="FCglR-N02xUBoJvE_LEW-8" edge="1" parent="organizer_area" source="load_thread" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;innerLoopWaypoints=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=gap;" target="load_thread">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FCglR-N02xUBoJvE_LEW-11" edge="1" parent="organizer_area" source="load_thread" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#00806A;fontSize=12;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="org_thread" value="Requisita retirada&amp;nbsp;&lt;div&gt;da carga&lt;/div&gt;">
+          <mxGeometry relative="1" x="-0.0435" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="345.37" y="330" as="sourcePoint" />
+            <mxPoint x="260" y="509" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="collector" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;spacing=10;" value="&lt;b&gt;Coletor de Dados&lt;/b&gt;&lt;br&gt;C/C++&lt;br&gt;Registra eventos e histórico&lt;br&gt;Armazena timestamp" vertex="1">
+          <mxGeometry height="140" width="330" x="1220" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="ipc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;spacing=8;" value="&lt;b&gt;Comunicação com processos dos robôs&lt;/b&gt;&lt;br&gt;IPC: [especificar mecanismo usado]" vertex="1">
+          <mxGeometry height="60" width="700" x="270" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="robots_boundary" parent="1" style="swimlane;html=1;startSize=36;rounded=1;horizontal=1;collapsible=0;fillColor=#EAF3F8;swimlaneFillColor=#F8FBFF;strokeColor=#6C9CC5;fontSize=16;fontStyle=1;dashed=1;" value="Processos dos Robôs — um processo por robô" vertex="1">
+          <mxGeometry height="300" width="1150" x="80" y="865" as="geometry" />
+        </mxCell>
+        <mxCell id="robot1" parent="robots_boundary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;spacing=10;" value="&lt;b&gt;Processo do Robô 1&lt;/b&gt;&lt;br&gt;C/C++&lt;br&gt;Thread de navegação&lt;br&gt;Thread de status" vertex="1">
+          <mxGeometry height="175" width="320" x="40" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="robot2" parent="robots_boundary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;spacing=10;" value="&lt;b&gt;Processo do Robô 2&lt;/b&gt;&lt;br&gt;C/C++&lt;br&gt;Thread de navegação&lt;br&gt;Thread de status" vertex="1">
+          <mxGeometry height="175" width="320" x="400" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="robotN" parent="robots_boundary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;spacing=10;" value="&lt;b&gt;Processo do Robô N&lt;/b&gt;&lt;br&gt;C/C++&lt;br&gt;Thread de navegação&lt;br&gt;Thread de status" vertex="1">
+          <mxGeometry height="175" width="320" x="760" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="shared" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;spacing=8;" value="&lt;b&gt;Dados compartilhados e sincronização&lt;/b&gt;&lt;br&gt;Estado dos robôs • Destinos • Atribuições • Cargas • Prontidão para acoplamento&lt;br&gt;Proteção conforme os mecanismos efetivamente implementados" vertex="1">
+          <mxGeometry height="75" width="900" x="210" y="1185" as="geometry" />
+        </mxCell>
+        <mxCell id="tools" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=12;spacing=8;" value="&lt;b&gt;Infraestrutura / ferramentas&lt;/b&gt;&lt;br&gt;C/C++ • Threads • Criação de processos • IPC • Mutexes / semáforos / variáveis de condição (preencher conforme o código)" vertex="1">
+          <mxGeometry height="55" width="1150" x="80" y="1275" as="geometry" />
+        </mxCell>
+        <mxCell id="e_manager_org" edge="1" parent="1" source="manager" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#00806A;fontSize=12;" target="org_thread" value="Novo robô / notificação">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_org_collector" edge="1" parent="1" source="org_thread" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#7030A0;fontSize=11;" target="collector" value="Eventos de operação">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_robo_ipc" edge="1" parent="1" source="robo_thread" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#00806A;fontSize=12;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" value="Comandos / estado">
+          <mxGeometry relative="1" x="0.6983" y="-1" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="619.38" y="628" as="sourcePoint" />
+            <mxPoint x="620.63" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_ipc_robot" edge="1" parent="1" source="ipc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#00806A;fontSize=12;" target="robots_boundary" value="Envio de tarefas e recebimento de estados">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_robot_shared" edge="1" parent="1" source="robots_boundary" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#D79B00;fontSize=11;" target="shared" value="Estado e dados operacionais">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_shared_collector" edge="1" parent="1" source="shared" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#7030A0;fontSize=11;" target="collector" value="Dados para registro">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

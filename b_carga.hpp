@@ -1,5 +1,5 @@
-#ifndef BAIA_DE_DESCARGA_HPP
-#define BAIA_DE_DESCARGA_HPP
+#ifndef BAIA_DE_CARGA_HPP
+#define BAIA_DE_CARGA_HPP
 
 #include "grafo.hpp"
 #include "carga.hpp"
@@ -35,6 +35,8 @@ class Baia_carga {
 
         sem_t arive_sem;
         
+        sem_t cargo_wait_sem;
+
         std::mutex m;
 
         int get_node_idx(int node_id);
@@ -52,6 +54,7 @@ class Baia_carga {
         int pub_cargo(void);
 
         Carga cargo_request_unload(void);
+        
         
 };
 

@@ -14,18 +14,21 @@ Baia_descarga::Baia_descarga(int id,int rows, Node** nodes) {
 
     // Inicia um semáforo
     sem_init(&this->bc_sem, 0, rows);
+    sem_init(&avb_sem, 0, rows);
 
 }
 
-int Baia_descarga::receive_cargo(Carga cargo) {
+Node* Baia_descarga::receive_cargo(int type) {
 
-    m.lock();
+    if(type > _qtd_node) {
+        return nullptr;
+    }
+    
+    sem_wait(&avb_sem);
 
-    this->_load.push(cargo);
+    Node* node = this->get_free_spot();
 
-    m.unlock();
-
-    return 0;
+    return node;
 }
 
 int Baia_descarga::get_node_idx(int node_id) {
@@ -90,4 +93,37 @@ int Baia_descarga::pub_cargo(void) {
 
 Carga Baia_descarga::cargo_response_clear(void) {
     return _cargo.front();
+}
+
+Node* Baia_descarga::get_free_spot(void) {
+
+    Node* node = nullptr;
+
+    m.lock();
+
+    for(int i=0;i<_qtd_node;i++) {
+        if(!_node_ocupied[i]) {
+            node = _node[i];
+            _node_ocupied[i] = true;
+        }
+    }
+
+    m.unlock();
+
+    return node;
+}
+
+int Baia_descarga::free_node(Node* node) {
+
+    for(int i=0;i<_qtd_node;i++) {
+
+        if(node == _node[i]) {
+            m.lock();
+            _node_ocupied[i] = false;
+            m.unlock();
+            break;
+        }
+    }
+
+    return _qtd_node;
 }

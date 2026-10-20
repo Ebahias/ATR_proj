@@ -16,6 +16,9 @@ Baia_carga::Baia_carga(int id, int rows, Node** nodes) {
     sem_init(&this->bc_sem, 0, rows);
 
     sem_init(&this->arive_sem, 0, 0);
+
+    sem_init(&this->cargo_wait_sem, 0, 0);
+
 }
 
 int Baia_carga::add_cargo(Carga cargo) {
@@ -67,7 +70,6 @@ int Baia_carga::pub_cargo(void) {
 
     sem_wait(&this->arive_sem);
 
-    
     m.lock();
 
     Carga cargo = _load.front();
@@ -78,7 +80,7 @@ int Baia_carga::pub_cargo(void) {
 
     // espera ter as vagas necessárias para adicionar na espera
     for(int i=0;i<cargo.get_type();i++) {
-        sem_wait(%this->bc_sem);
+        sem_wait(&this->bc_sem);
     }
     
     
@@ -93,9 +95,14 @@ int Baia_carga::pub_cargo(void) {
     
     _cargo.push(cargo);
 
+    sem_post(&cargo_wait_sem);
+
     return 0;
 }
 
 Carga Baia_carga::cargo_request_unload(void) {
+
+    sem_wait(&cargo_wait_sem);
+
     return _cargo.front();
 }

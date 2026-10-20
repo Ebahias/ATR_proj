@@ -5,6 +5,7 @@
 #include "math.h"
 #include <vector>
 #include <iostream>
+#include <mutex>
 
 class Node {
 
@@ -15,6 +16,10 @@ class Node {
         float _pos_y;
 
         std::vector<Node*> _ngb; // vizinhos
+
+        bool locked;
+
+        std::mutex m;
 
     public:
 
@@ -34,7 +39,18 @@ class Node {
 
         bool is_on_y_pos(float pos_y);
 
+        bool is_locked(void);
+
+        void set_locked(void);
+
+        void set_free(void);
+
+        float get_pos_x(void);
+
+        float get_pos_y(void);
+
 };
 
+std::vector<Node*> dijkstra(Node* origem, Node* destino);
 
 #endif
