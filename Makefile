@@ -17,19 +17,25 @@ GESTOR_SRC := gestor_robos/main.cpp gestor_robos/gestor_robos.cpp \
 ROBO_SRC := robo/main.cpp robo/contexto_robo.cpp robo/hardware_robo.cpp \
             robo/navegacao.cpp robo/navegador.cpp robo/status.cpp $(IPC_ROBO)
 
+# Coletor de Dados (tarefa 6)
+COLETOR_SRC := coletor/main.cpp coletor/coletor.cpp coletor/rastreio.cpp \
+               comum/ipc_coletor.cpp $(IPC_ROBO)
+
 # Ferramentas de teste
 NOVO_ROBO_SRC := ferramentas/novo_robo.cpp gestor_robos/fonte_novos_robos.cpp
 ESCUTA_SRC    := ferramentas/escuta_gestor.cpp comum/ipc_gestor.cpp
 COMANDO_SRC   := ferramentas/comando_robo.cpp $(IPC_ROBO)
 MONITOR_SRC   := ferramentas/monitor_frota.cpp $(IPC_ROBO)
 MAPA_SRC      := ferramentas/mapa.cpp comum/mapa.cpp
+ESCUTA_COL_SRC := ferramentas/escuta_coletor.cpp comum/ipc_coletor.cpp $(IPC_ROBO)
 
 PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gestor \
-             $(BIN)/comando_robo $(BIN)/monitor_frota $(BIN)/mapa
+             $(BIN)/comando_robo $(BIN)/monitor_frota $(BIN)/mapa \
+             $(BIN)/coletor $(BIN)/escuta_coletor
 
 obj = $(patsubst %.cpp,$(BUILD)/%.o,$(1))
 
-.PHONY: all clean teste teste-gestor teste-robo teste-navegacao teste-status
+.PHONY: all clean teste teste-gestor teste-robo teste-navegacao teste-status teste-coletor
 
 all: $(PROGRAMAS)
 
@@ -40,6 +46,8 @@ $(BIN)/escuta_gestor: $(call obj,$(ESCUTA_SRC))
 $(BIN)/comando_robo: $(call obj,$(COMANDO_SRC))
 $(BIN)/monitor_frota: $(call obj,$(MONITOR_SRC))
 $(BIN)/mapa: $(call obj,$(MAPA_SRC))
+$(BIN)/coletor: $(call obj,$(COLETOR_SRC))
+$(BIN)/escuta_coletor: $(call obj,$(ESCUTA_COL_SRC))
 
 $(PROGRAMAS):
 	@mkdir -p $(@D)
@@ -49,7 +57,7 @@ $(BUILD)/%.o: %.cpp
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-teste: teste-gestor teste-robo teste-navegacao teste-status
+teste: teste-gestor teste-robo teste-navegacao teste-status teste-coletor
 
 teste-gestor: all
 	./testes/teste_gestor.sh
@@ -62,6 +70,9 @@ teste-navegacao: all
 
 teste-status: all
 	./testes/teste_status.sh
+
+teste-coletor: all
+	./testes/teste_coletor.sh
 
 clean:
 	rm -rf $(BIN) $(BUILD)
