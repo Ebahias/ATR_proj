@@ -4,6 +4,8 @@
 #include "grafo.hpp"
 #include "carga.hpp"
 #include <stack>
+#include <cstring>
+
 
 #define MAX_BD_ROWS 4
 
@@ -25,7 +27,7 @@ class Baia_descarga {
 
         std::queue<Carga> _load;
 
-        sem_t bc_sem[4];
+        sem_t bc_sem;
 
         sem_t avb_sem;
 
@@ -35,7 +37,7 @@ class Baia_descarga {
 
     public:
 
-        Node* _node[MAX_BC_ROWS];
+        Node* _node[MAX_BD_ROWS];
 
         Baia_descarga(int id, int rows, Node** nodes);
 

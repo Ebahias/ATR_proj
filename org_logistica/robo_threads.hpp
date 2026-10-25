@@ -14,7 +14,7 @@ typedef struct {
     sem_t* sem;
 }robo_thread_arg_t;
 
-void robo_thread(void* arg);
+void* robo_thread(void* arg);
 
 void send_robo_to_position(Robo* robo, Node* i_node, Node* f_node, sem_t* sem);
 

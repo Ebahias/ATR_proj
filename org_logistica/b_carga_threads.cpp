@@ -1,10 +1,12 @@
 #include "b_carga_threads.hpp"
 
+#include <boost/asio.hpp>
+
 
 /**
  * Thread para simular a chegada de uma carga nova na Baia de carga
  */
-void Baia_carga_load_thread(void* arg) {
+void* Baia_carga_load_thread(void* arg) {
 
     Baia_carga_arg_t* baia_arg = (Baia_carga_arg_t*)arg;
     
@@ -14,37 +16,31 @@ void Baia_carga_load_thread(void* arg) {
     
     int grafo_size = baia_arg->grafo_size;
 
+    boost::asio::io_context io;
 
     while(true) {
+
+        boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(5));
 
         Carga carga_nova(1);
 
         baia->add_cargo(carga_nova);
 
-        sleep(4);
+        tout.wait();
+        
     }
 
 
-    return;
+    return nullptr;
 }
 
-void Baia_carga_process_thread(void* arg) {
-
-    return;
-}
-
-void Baia_carga_consume_thread(void* arg) {
-
-    return;
-}
-
-void init_baia_carga_threads(Baia_carga_arg_t* Baia, Node** grafo, int grafo_size) {
+void init_baia_carga_threads(Baia_carga* Baia, Node** grafo, int grafo_size) {
    
-    pthread_t thread_load, thread_process, thread_consume;
+    pthread_t thread_load;
 
-    Baia_recarga_arg_t baia_arg = {0};
+    Baia_carga_arg_t baia_arg = {0};
 
-    baia_arg.baia = baia;
+    baia_arg.baia = Baia;
     baia_arg.grafo = grafo;
     baia_arg.grafo_size = grafo_size;
 

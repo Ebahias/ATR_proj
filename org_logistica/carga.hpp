@@ -2,6 +2,7 @@
 #define CARGA_HPP
 
 #include "grafo.hpp"
+#include <cstring>
 
 class Carga {
 
@@ -13,12 +14,15 @@ class Carga {
     public:
 
         int _node_id[4];
+        
+        std::vector<Node*> _node;
 
         Carga(int type);
 
         int get_type(void);
 
-        int set_node_id_on(int node_id);
+        int set_node_id_on(Node* node);
+
 };
 
 #endif

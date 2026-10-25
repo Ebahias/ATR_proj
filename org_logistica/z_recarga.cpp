@@ -10,7 +10,7 @@ Zona_recarga::Zona_recarga(int id, int rows, Node** nodes) {
         this->_node[i] = nodes[i];
     }
 
-    memset(_node_ocupied, 0, _rows*sizeof(bool));
+    std::memset(_node_ocupied, 0, _rows*sizeof(bool));
 
     sem_init(&zone_sem, 0, rows);
 
@@ -19,7 +19,7 @@ Zona_recarga::Zona_recarga(int id, int rows, Node** nodes) {
 Node* Zona_recarga::get_free_spot(void) {
 
 
-    int ret = nullptr;
+    Node* ret = nullptr;
 
     m.lock();
 
@@ -66,6 +66,18 @@ int Zona_recarga::free_spot(int node_id) {
     sem_post(&this->zone_sem);
 
     return idx;
+}
+
+int Zona_recarga::get_node_idx(int node_id) {
+
+    int ret = -1;
+
+    for(int i=0;i<_rows;i++) {
+        if(node_id == _node[i]->get_id()) 
+            ret = i;
+    }
+
+    return ret;
 }
 
 void Zona_recarga::wait_for_spot(void) {

@@ -6,6 +6,11 @@
 #include <vector>
 #include <iostream>
 #include <mutex>
+#include <vector>
+#include <unordered_map>
+#include <queue>
+#include <string>
+#include <semaphore.h>
 
 class Node {
 

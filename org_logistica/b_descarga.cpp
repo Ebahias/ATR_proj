@@ -73,14 +73,14 @@ int Baia_descarga::pub_cargo(void) {
 
     // espera ter as vagas necessárias para adicionar na espera
     for(int i=0;i<cargo.get_type();i++) {
-        sem_wait(%this->bc_sem);
+        sem_wait(&this->bc_sem);
     }
     
     
     for(int i=0;i<cargo.get_type();i++) {
 
         if(!this->_node_ocupied[i]) {
-            cargo->set_node_id_on(this->_node[i]->get_id());
+            cargo.set_node_id_on(this->_node[i]);
             this->_node_ocupied[i] = true;
         }
 

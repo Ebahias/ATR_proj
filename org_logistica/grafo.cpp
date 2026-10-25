@@ -13,7 +13,7 @@ int Node::get_id(void) {
 }
 
 std::pair<float,float> Node::get_location(void) {
-    return std::pair<float,float> pos(_pos_x, _pos_y);
+    return std::pair<float,float>(_pos_x, _pos_y);
 }
 
 std::vector<Node*>* Node::get_ngb(void) {
@@ -45,7 +45,7 @@ bool Node::is_on_x_pos(float pos_x) {
 
 bool Node::is_on_y_pos(float pos_y) {
 
-        if(pos_x == _pos_x)
+        if(pos_y == _pos_y)
         return true;
     else 
         return false;
@@ -79,6 +79,14 @@ void Node::set_free(void) {
     locked = false;
 
     m.unlock();
+}
+
+float Node::get_pos_x(void) {
+    return _pos_x;
+}
+
+float Node::get_pos_y(void) {
+    return _pos_y;
 }
 
 /**

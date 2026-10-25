@@ -12,7 +12,7 @@ typedef struct {
 
 }Baia_carga_arg_t;
 
-void Baia_carga_load_thread(void* arg);
+void* Baia_carga_load_thread(void* arg);
 
 void Baia_carga_consume_thread(void* arg);
 

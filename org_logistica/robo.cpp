@@ -1,5 +1,5 @@
 #include "robo.hpp"
-
+#include <stdlib.h>
 Robo::Robo(int id, float initial_x, float initial_y) {
 
     _id = id;
@@ -14,7 +14,7 @@ robo_status_enum Robo::get_status(void) {
     return _status;
 }
 
-int Robo::get_status(void) {
+int Robo::get_id(void) {
 
     return _id;
 }
@@ -22,7 +22,7 @@ int Robo::get_status(void) {
 // Implementado via IPC
 Node* Robo::wait_for_arrival(void) {
 
-    return nullptr
+    return nullptr;
 }
 
 // Implementado via IPC
@@ -30,6 +30,15 @@ int Robo::send_path(std::vector<Node*> path) {
 
     return 0;
 }
+
+float Robo::get_pos_x(void) {
+    return _pos_x;
+}
+
+float Robo::get_pos_y(void) {
+    return _pos_y;
+}
+
 
 int Robo::lift(void) {
     return 0;

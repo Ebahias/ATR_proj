@@ -1,6 +1,6 @@
 #include "robo_threads.hpp"
 
-void robo_thread(void* arg) {
+void* robo_thread(void* arg) {
 
     robo_thread_arg_t* robo_arg = (robo_thread_arg_t*)arg;
     
@@ -22,7 +22,7 @@ void robo_thread(void* arg) {
             break;
     }
     
-    sem_post(&robo_arg->sem);
+    sem_post(robo_arg->sem);
 }
 
 void send_robo_to_position(Robo* robo, Node* i_node, Node* f_node, sem_t* sem) {

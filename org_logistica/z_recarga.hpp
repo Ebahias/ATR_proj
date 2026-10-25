@@ -3,7 +3,7 @@
 
 #include "grafo.hpp"
 #include <mutex>
-#include "pthreads.hpp"
+#include <cstring>
 
 #define MAX_ZONE_ROWS 6
 
@@ -22,7 +22,7 @@ class Zona_recarga {
 
         int _rows;
 
-        sem_t zone_sem[MAX_ZONE_ROWS];
+        sem_t zone_sem;
 
         std::mutex m;
 

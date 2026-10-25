@@ -1,5 +1,5 @@
 CXX      ?= g++
-CXXFLAGS ?= -std=c++17 -Wall -Wextra -O2
+CXXFLAGS ?= -std=c++20 -Wall -Wextra -O2
 CXXFLAGS += -pthread -I. -MMD -MP
 LDLIBS   += -pthread -lrt
 
@@ -29,9 +29,16 @@ MONITOR_SRC   := ferramentas/monitor_frota.cpp $(IPC_ROBO)
 MAPA_SRC      := ferramentas/mapa.cpp comum/mapa.cpp
 ESCUTA_COL_SRC := ferramentas/escuta_coletor.cpp comum/ipc_coletor.cpp $(IPC_ROBO)
 
+
+# OrganiZador de logistica
+ORGANIZADOR_SRC 	  := org_logistica/org_logistica.cpp org_logistica/robo_manager_threads.cpp org_logistica/b_carga_threads.cpp \
+						 org_logistica/robo_threads.cpp org_logistica/robo_manager.cpp org_logistica/robo.cpp \
+						 org_logistica/b_carga.cpp org_logistica/b_descarga.cpp org_logistica/z_recarga.cpp \
+						 org_logistica/robo.cpp org_logistica/carga.cpp org_logistica/grafo.cpp			 
+
 PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gestor \
              $(BIN)/comando_robo $(BIN)/monitor_frota $(BIN)/mapa \
-             $(BIN)/coletor $(BIN)/escuta_coletor
+             $(BIN)/coletor $(BIN)/escuta_coletor $(BIN)/org_logistica
 
 obj = $(patsubst %.cpp,$(BUILD)/%.o,$(1))
 
@@ -48,6 +55,8 @@ $(BIN)/monitor_frota: $(call obj,$(MONITOR_SRC))
 $(BIN)/mapa: $(call obj,$(MAPA_SRC))
 $(BIN)/coletor: $(call obj,$(COLETOR_SRC))
 $(BIN)/escuta_coletor: $(call obj,$(ESCUTA_COL_SRC))
+$(BIN)/org_logistica: $(call obj,$(ORGANIZADOR_SRC))
+
 
 $(PROGRAMAS):
 	@mkdir -p $(@D)

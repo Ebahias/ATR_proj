@@ -1,5 +1,5 @@
 #include "b_carga.hpp"
-
+#include <cstring>
 
 Baia_carga::Baia_carga(int id, int rows, Node** nodes) {
 
@@ -10,7 +10,7 @@ Baia_carga::Baia_carga(int id, int rows, Node** nodes) {
         this->_node[i] = nodes[i];
     }
 
-    memset(_node_ocupied, 0, _rows*sizeof(bool));
+    std::memset(_node_ocupied, 0, _rows*sizeof(bool));
 
     // Inicia um semáforo
     sem_init(&this->bc_sem, 0, rows);
@@ -87,7 +87,7 @@ int Baia_carga::pub_cargo(void) {
     for(int i=0;i<cargo.get_type();i++) {
 
         if(!this->_node_ocupied[i]) {
-            cargo->set_node_id_on(this->_node[i]->get_id());
+            cargo.set_node_id_on(this->_node[i]);
             this->_node_ocupied[i] = true;
         }
 

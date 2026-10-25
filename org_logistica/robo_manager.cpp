@@ -10,12 +10,12 @@ Robo_manager::Robo_manager(std::vector<Baia_carga*> b_carga, std::vector<Baia_de
 
 Robo* Robo_manager::get_avaiable_robo(void) {
 
-    int ret = nullptr;
+    Robo* ret = nullptr;
 
     for(auto r : _robo) {
 
         if(r->get_status() == AVAIABLE)
-            ret = r->get_id;
+            ret = r;
     }
 
     return ret;
@@ -46,7 +46,7 @@ Node* Robo_manager::get_nearest_node(Robo* robo) {
 
     for(auto n : this->_grafo) {
 
-        float dist = sqrt((n->get_pos_x() - robo->get_pos_x())^2 + (n->get_pos_y() - robo->get_pos_y())^2);
+        float dist = sqrt(pow((n->get_pos_x() - robo->get_pos_x()), 2) + pow((n->get_pos_y() - robo->get_pos_y()), 2));
 
         if(dist < min_dist) {
 

@@ -43,7 +43,7 @@ class Baia_carga {
 
     public:
 
-        Node* _node[MAX_BC_ROWS];
+        std::vector<Node*> _node;
 
         Baia_carga(int id, int rows, Node** nodes);
 

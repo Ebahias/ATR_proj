@@ -1,20 +1,25 @@
 #include "robo_manager_threads.hpp"
 
-void organizador_de_logistica_thread(void* arg) {
+void* organizador_de_logistica_thread(void* arg) {
 
     Robo_manager_arg_t* manager_arg = (Robo_manager_arg_t*) arg;
 
     Robo_manager* manager = manager_arg->manager;
     Baia_carga* b_carga = manager_arg->b_carga;
 
+    std::vector<Carga> rcv_carga;
 
     while(true) {
 
         Carga carga = b_carga->cargo_request_unload();
         
+        rcv_carga.push_back(carga);
+
+        Carga* p_carga = &(rcv_carga.back());
+
         std::vector<Robo*> assign_robo;
 
-        for(int i=0;i<carga.get_type();i++) {
+        for(int i=0;i<p_carga->get_type();i++) {
 
             Robo* av_robo = manager->get_avaiable_robo();
             
@@ -27,7 +32,7 @@ void organizador_de_logistica_thread(void* arg) {
         Robo_assign_arg_t assign_arg;
 
         assign_arg.assign_robo = assign_robo;
-        assign_arg.carga = &carga;
+        assign_arg.carga = p_carga;
         assign_arg.manager = manager;
 
         pthread_create( &thread_assign,
@@ -39,9 +44,9 @@ void organizador_de_logistica_thread(void* arg) {
     }
 }
 
-void Robo_manager_process_cargo_thread(void* arg);
+void* Robo_manager_process_cargo_thread(void* arg);
 
-void Robo_manager_assign_robo_thread(void* arg) {
+void* Robo_manager_assign_robo_thread(void* arg) {
 
     Robo_assign_arg_t* assign_arg = (Robo_assign_arg_t*) arg;
 
@@ -51,22 +56,20 @@ void Robo_manager_assign_robo_thread(void* arg) {
 
     Robo_manager* manager = assign_arg->manager;
 
-    Carga cargo;
-
-    memcpy(&cargo, assign_arg->carga, sizeof(Carga));
+    Carga* cargo = assign_arg->carga;
 
     sem_t sem;
 
     sem_init(&sem, 0, 0);
 
-    for(int i=0;i<cargo.get_type();i++) {
+    for(int i=0;i<cargo->get_type();i++) {
         
-        send_robo_to_position(ass_robo[i], manager->get_nearest_node(ass_robo[i]), cargo._node_id[i]);
+        send_robo_to_position(ass_robo[i], manager->get_nearest_node(ass_robo[i]), cargo->_node[i], &sem);
 
     }
 
-    for(int i=0;i<cargo.get_type();i++) {
-        sem_wait(sem);
+    for(int i=0;i<cargo->get_type();i++) {
+        sem_wait(&sem);
     }
 
     for(auto r : ass_robo) 
@@ -76,13 +79,13 @@ void Robo_manager_assign_robo_thread(void* arg) {
 
     Baia_descarga* b_d = nullptr;
 
-    for(int i=0;i<cargo.get_type();i++) {
+    for(int i=0;i<cargo->get_type();i++) {
 
         Node* node;
 
         for(auto bd : manager->_b_descarga) {
             
-            node = bd->receive_cargo(cargo.get_type());
+            node = bd->receive_cargo(cargo->get_type());
             
             if(node != nullptr) {
 
@@ -93,15 +96,15 @@ void Robo_manager_assign_robo_thread(void* arg) {
         }
     }
 
-     for(int i=0;i<cargo.get_type();i++) {
+     for(int i=0;i<cargo->get_type();i++) {
         
-        send_robo_to_position(ass_robo[i], manager->get_nearest_node(ass_robo[i]), nodes_bd[i]);
+        send_robo_to_position(ass_robo[i], manager->get_nearest_node(ass_robo[i]), nodes_bd[i], &sem);
 
     }
 
 
-    for(int i=0;i<cargo.get_type();i++) {
-        sem_wait(sem);
+    for(int i=0;i<cargo->get_type();i++) {
+        sem_wait(&sem);
     }
 
     for(auto n : nodes_bd) {

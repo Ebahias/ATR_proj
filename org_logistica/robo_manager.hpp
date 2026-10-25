@@ -6,8 +6,6 @@
 #include "b_descarga.hpp"
 #include "z_recarga.hpp"
 
-#include <boost/asio.hpp>
-
 
 class Robo_manager {
 
