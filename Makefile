@@ -57,6 +57,7 @@ $(BIN)/coletor: $(call obj,$(COLETOR_SRC))
 $(BIN)/escuta_coletor: $(call obj,$(ESCUTA_COL_SRC))
 $(BIN)/org_logistica: $(call obj,$(ORGANIZADOR_SRC))
 
+$(BIN)/gestor_robos $(BIN)/robo $(BIN)/org_logistica: LDLIBS += -lmosquitto
 
 $(PROGRAMAS):
 	@mkdir -p $(@D)
