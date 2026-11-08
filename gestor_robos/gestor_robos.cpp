@@ -233,6 +233,7 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
         if(getppid() != pid_gestor)
             _exit(1);
 
+        close_range(3, ~0U, 0);
         execv(argv[0], argv);
         _exit(127);
     }
