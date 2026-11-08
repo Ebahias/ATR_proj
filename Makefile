@@ -11,7 +11,8 @@ BUILD := build
 IPC_ROBO := comum/ipc_robo.cpp comum/passagens.cpp comum/recarga.cpp comum/mapa.cpp
 
 GESTOR_SRC := gestor_robos/main.cpp gestor_robos/gestor_robos.cpp \
-              gestor_robos/fonte_novos_robos.cpp comum/ipc_gestor.cpp $(IPC_ROBO)
+              gestor_robos/fonte_novos_robos.cpp gestor_robos/fonte_mqtt.cpp \
+              comum/cliente_mqtt.cpp comum/ipc_gestor.cpp $(IPC_ROBO)
 
 # Processo de cada robô (tarefa 2; threads das tarefas 3 e 4)
 ROBO_SRC := robo/main.cpp robo/contexto_robo.cpp robo/hardware_robo.cpp \

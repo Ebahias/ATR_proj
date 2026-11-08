@@ -12,10 +12,12 @@
  */
 
 #include "gestor_robos/gestor_robos.hpp"
+#include "gestor_robos/fonte_mqtt.hpp"
 #include "comum/log.hpp"
 
 #include <csignal>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <unistd.h>
 
@@ -36,17 +38,21 @@ static std::string pasta_do_executavel(void) {
 
 int main(int argc, char** argv) {
 
+    std::string tipo_fonte = "fifo";
     std::string fifo = FIFO_NOVO_ROBO_PADRAO;
     std::string exe_robo = pasta_do_executavel() + "/robo";
 
     for(int i=1;i<argc;i++) {
 
-        if(strcmp(argv[i], "--fifo") == 0 && i + 1 < argc) {
+        if(strcmp(argv[i], "--fonte") == 0 && i + 1 < argc
+           && (strcmp(argv[i + 1], "fifo") == 0 || strcmp(argv[i + 1], "mqtt") == 0)) {
+            tipo_fonte = argv[++i];
+        } else if(strcmp(argv[i], "--fifo") == 0 && i + 1 < argc) {
             fifo = argv[++i];
         } else if(strcmp(argv[i], "--robo") == 0 && i + 1 < argc) {
             exe_robo = argv[++i];
         } else {
-            fprintf(stderr, "uso: %s [--fifo <caminho>] [--robo <executável>]\n", argv[0]);
+            fprintf(stderr, "uso: %s [--fonte fifo|mqtt] [--fifo <caminho>] [--robo <executável>]\n", argv[0]);
             return 2;
         }
     }
@@ -61,8 +67,14 @@ int main(int argc, char** argv) {
 
     signal(SIGPIPE, SIG_IGN);
 
-    FonteFifo fonte(fifo);
-    GestorRobos gestor(&fonte, exe_robo);
+    std::unique_ptr<FonteNovosRobos> fonte;
+
+    if(tipo_fonte == "mqtt")
+        fonte = std::make_unique<FonteMqtt>();
+    else
+        fonte = std::make_unique<FonteFifo>(fifo);
+
+    GestorRobos gestor(fonte.get(), exe_robo);
 
     if(!gestor.iniciar())
         return 1;
