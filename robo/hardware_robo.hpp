@@ -1,6 +1,11 @@
 #ifndef HARDWARE_ROBO_HPP
 #define HARDWARE_ROBO_HPP
 
+#include "comum/cliente_mqtt.hpp"
+
+#include <string>
+#include <time.h>
+
 #include <pthread.h>
 
 /*
@@ -95,6 +100,50 @@ class HardwareSimulado : public HardwareRobo {
         bool simular_falha(bool falha) override;
 
         bool simular_bateria(int percentual) override;
+};
+
+
+class HardwareMqtt : public HardwareRobo {
+
+    protected:
+
+        int _id;
+
+        ClienteMqtt _cliente;
+
+        pthread_mutex_t _mtx;
+
+        LeituraHardware _leitura;
+
+        bool _recebeu_entrada;
+
+        struct timespec _t_ultima_entrada;
+
+        int _sp_x;
+        int _sp_y;
+        bool _acoplar;
+
+        std::string _topico_entradas;
+
+        void receber(const std::string& topico, const std::string& payload);
+
+        void publicar_saidas(int sp_x, int sp_y, bool acoplar);
+
+    public:
+
+        HardwareMqtt(int id, int x, int y);
+
+        ~HardwareMqtt() override;
+
+        bool iniciar(void) override;
+
+        void parar(void) override;
+
+        LeituraHardware ler(void) override;
+
+        void escrever_setpoint(int x, int y) override;
+
+        void acoplar_e_erguer(bool ativo) override;
 };
 
 #endif

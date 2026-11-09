@@ -16,7 +16,8 @@ GESTOR_SRC := gestor_robos/main.cpp gestor_robos/gestor_robos.cpp \
 
 # Processo de cada robô (tarefa 2; threads das tarefas 3 e 4)
 ROBO_SRC := robo/main.cpp robo/contexto_robo.cpp robo/hardware_robo.cpp \
-            robo/navegacao.cpp robo/navegador.cpp robo/status.cpp $(IPC_ROBO)
+            robo/navegacao.cpp robo/navegador.cpp robo/status.cpp \
+            comum/cliente_mqtt.cpp $(IPC_ROBO)
 
 # Coletor de Dados (tarefa 6)
 COLETOR_SRC := coletor/main.cpp coletor/coletor.cpp coletor/rastreio.cpp \

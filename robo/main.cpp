@@ -7,11 +7,20 @@
  *   slot  posição do robô na tabela de status da memória compartilhada
  *   x, y  posição inicial
  *
+ * Hardware, escolhido pela variável de ambiente ATR_HW (herdada do Gestor):
+ *   - ausente ou outro valor: HardwareSimulado, física simulada no próprio
+ *     processo (padrão)
+ *   - "mqtt": HardwareMqtt, troca as entradas e saídas da Tabela 1 com o
+ *     simulador externo pelos tópicos atr/robo/<id>/entradas, /saidas e
+ *     /vivo (broker em ATR_MQTT_HOST/ATR_MQTT_PORT, padrão localhost:1883)
+ *
  * Threads:
  *   - principal:  trata SIGINT/SIGTERM (sigwait) e coordena o encerramento
  *   - navegação:  Comando de Navegação (robo/navegacao.cpp)
  *   - status:     Status do Robô (robo/status.cpp)
- *   - física:     hardware simulado (só na Etapa 1, robo/hardware_robo.cpp)
+ *   - física:     só com HardwareSimulado (robo/hardware_robo.cpp)
+ *   - rede MQTT:  só com HardwareMqtt, criada pela libmosquitto; o callback
+ *                 só copia as entradas sob mutex, nunca bloqueia
  *
  * IPC: lê comandos da fila "/atr_robo_<id>_cmd" e publica status e eventos
  * na memória compartilhada SHM_FROTA (comum/ipc_robo.hpp).
@@ -26,6 +35,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <unistd.h>
 
 static bool ler_int(const char* s, int& valor) {
@@ -74,16 +84,25 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    HardwareSimulado hw(x, y);
+    const char* tipo_hw = getenv("ATR_HW");
 
-    if(!hw.iniciar()) {
+    std::unique_ptr<HardwareRobo> hw_dono;
+
+    if(tipo_hw != NULL && strcmp(tipo_hw, "mqtt") == 0)
+        hw_dono = std::make_unique<HardwareMqtt>(id, x, y);
+    else
+        hw_dono = std::make_unique<HardwareSimulado>(x, y);
+
+    HardwareRobo* hw = hw_dono.get();
+
+    if(!hw->iniciar()) {
         log_msg(modulo, "falha ao iniciar o hardware");
         mq_close(mq);
         shm_frota_fechar(shm);
         return 1;
     }
 
-    ContextoRobo ctx(id, slot, shm, &hw, mq);
+    ContextoRobo ctx(id, slot, shm, hw, mq);
 
     pthread_t th_nav, th_status;
 
@@ -111,7 +130,7 @@ int main(int argc, char** argv) {
     ctx.solicitar_encerramento();
     pthread_join(th_nav, NULL);
     pthread_join(th_status, NULL);
-    hw.parar();
+    hw->parar();
 
     shm_evento_publicar(shm, id, EV_ENCERRADO, "processo %d encerrado", getpid());
 
