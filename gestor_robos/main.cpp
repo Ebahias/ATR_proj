@@ -1,10 +1,15 @@
 /*
  * Processo do Gestor de Robôs.
  *
- * Uso: gestor_robos [--fifo <caminho>] [--robo <executável>]
+ * Uso: gestor_robos [--fonte fifo|mqtt] [--fifo <caminho>] [--robo <executável>]
  *
- *   --fifo  FIFO onde chegam os anúncios (padrão: run/novo_robo.fifo,
- *           relativo ao diretório de onde o sistema é executado)
+ *   --fonte de onde chegam os anúncios de novos robôs (padrão: fifo)
+ *             fifo  FIFO local (FonteFifo)
+ *             mqtt  tópico MQTT atr/robos/novo (FonteMqtt), com o broker em
+ *                   ATR_MQTT_HOST/ATR_MQTT_PORT (padrão localhost:1883)
+ *   --fifo  FIFO onde chegam os anúncios com --fonte fifo (padrão:
+ *           run/novo_robo.fifo, relativo ao diretório de onde o sistema é
+ *           executado); ignorado com --fonte mqtt
  *   --robo  executável do processo de cada robô (padrão: "robo" na mesma
  *           pasta deste executável)
  *
