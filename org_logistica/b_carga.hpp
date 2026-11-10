@@ -45,8 +45,10 @@ class Baia_carga {
 
         std::vector<Node*> _node;
 
-        Baia_carga(int id, int rows, Node** nodes);
+        Baia_carga(int id, int rows, std::vector<Node*>& node);
 
+        int get_id(void);
+        
         int add_cargo(Carga cargo);
 
         Carga consume_cargo(void);

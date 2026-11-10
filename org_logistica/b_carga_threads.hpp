@@ -18,6 +18,6 @@ void Baia_carga_consume_thread(void* arg);
 
 void Baia_carga_process_thread(void* arg);
 
-void init_baia_carga_threads(Baia_carga_arg_t* Baia, Node** grafo, int grafo_size);
+void init_baia_carga_threads(Baia_carga* Baia);
 
 #endif

@@ -4,6 +4,7 @@
 
 #include "carga.hpp"
 #include "grafo.hpp"
+#include "comum/ipc_robo.hpp"
 
 typedef enum {
 
@@ -30,9 +31,25 @@ class Robo {
 
         std::mutex m;
 
+        int _estado;
+
+        int _modo;
+
+        int _ativo;
+
+        int _bateria;
+
+        int _fase;
+
     public:
 
+        pid_t _pid;                  
+
+        Robo(void);
+
         Robo(int id, float initial_x, float initial_y);
+
+        Robo(int id, float initial_x, float initial_y, int pid);
 
         robo_status_enum get_status(void);
 
@@ -50,6 +67,10 @@ class Robo {
 
         int lift(void);
 
+        // Função que atualiza estados a partir do IPC
+        int update_status(void);
+
+        int get_fase(void);
 };
 
 #endif

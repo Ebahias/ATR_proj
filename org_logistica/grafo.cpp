@@ -3,8 +3,8 @@
 
 Node::Node(int id, float pos_x, float pos_y) {
     _id = id;
-    _pos_x = id;
-    _pos_y = id;
+    _pos_x = pos_x;
+    _pos_y = pos_y;
     locked = false;
 }
 

@@ -37,9 +37,9 @@ class Baia_descarga {
 
     public:
 
-        Node* _node[MAX_BD_ROWS];
+        std::vector<Node*> _node;
 
-        Baia_descarga(int id, int rows, Node** nodes);
+        Baia_descarga(int id,int rows, std::vector<Node*>& node);
 
         int consume_cargo(void);
 

@@ -13,17 +13,21 @@ class Robo_manager {
 
         std::vector<Robo*> _robo;
 
-        std::vector<Baia_carga*> _b_carga;
-
         std::vector<Zona_recarga*> _z_recarga;
 
         std::vector<Node*> _grafo;
 
+        int _num_tarefas;
+
+        std::mutex m;
+
     public:
+
+        std::vector<Baia_carga*> _b_carga;
 
         std::vector<Baia_descarga*> _b_descarga;
 
-        Robo_manager(std::vector<Baia_carga*> b_carga, std::vector<Baia_descarga*> b_descarga, std::vector<Zona_recarga*> z_recarga);
+        Robo_manager(std::vector<Baia_carga*>& b_carga, std::vector<Baia_descarga*>& b_descarga, std::vector<Zona_recarga*>& z_recarga);
 
         Robo* get_avaiable_robo(void);
 
@@ -37,6 +41,8 @@ class Robo_manager {
         void add_grafo(std::vector<Node*> grafo);
 
         Node* get_nearest_node(Robo* robo);
+
+        int get_new_tarefa(void);
 };
 
 #endif

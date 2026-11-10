@@ -1,5 +1,5 @@
 CXX      ?= g++
-CXXFLAGS ?= -std=c++20 -Wall -Wextra -O2
+CXXFLAGS ?= -std=c++2a -Wall -Wextra -O2
 CXXFLAGS += -pthread -I. -MMD -MP
 LDLIBS   += -pthread -lrt
 
@@ -9,6 +9,10 @@ BUILD := build
 # Gestor de Robôs (tarefa 1)
 # Módulos comuns de IPC (memória da frota, passagens estreitas, mapa)
 IPC_ROBO := comum/ipc_robo.cpp comum/passagens.cpp comum/recarga.cpp comum/mapa.cpp
+
+
+# Módulos para agregar o gestor de robos ao organizador de logistica
+IPC_GESTOR := comum/ipc_gestor.cpp 
 
 GESTOR_SRC := gestor_robos/main.cpp gestor_robos/gestor_robos.cpp \
               gestor_robos/fonte_novos_robos.cpp gestor_robos/fonte_mqtt.cpp \
@@ -32,11 +36,12 @@ MAPA_SRC      := ferramentas/mapa.cpp comum/mapa.cpp
 ESCUTA_COL_SRC := ferramentas/escuta_coletor.cpp comum/ipc_coletor.cpp $(IPC_ROBO)
 
 
+
 # OrganiZador de logistica
 ORGANIZADOR_SRC 	  := org_logistica/org_logistica.cpp org_logistica/robo_manager_threads.cpp org_logistica/b_carga_threads.cpp \
-						 org_logistica/robo_threads.cpp org_logistica/robo_manager.cpp org_logistica/robo.cpp \
+						 org_logistica/grafo_armazem.cpp org_logistica/robo_threads.cpp org_logistica/robo_manager.cpp org_logistica/robo.cpp \
 						 org_logistica/b_carga.cpp org_logistica/b_descarga.cpp org_logistica/z_recarga.cpp \
-						 org_logistica/robo.cpp org_logistica/carga.cpp org_logistica/grafo.cpp			 
+						 org_logistica/robo.cpp org_logistica/carga.cpp org_logistica/grafo.cpp	$(IPC_GESTOR)	$(IPC_ROBO) 
 
 PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gestor \
              $(BIN)/comando_robo $(BIN)/monitor_frota $(BIN)/mapa \

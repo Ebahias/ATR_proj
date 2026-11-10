@@ -1,13 +1,13 @@
 #include "b_descarga.hpp"
 
 
-Baia_descarga::Baia_descarga(int id,int rows, Node** nodes) {
+Baia_descarga::Baia_descarga(int id,int rows, std::vector<Node*>& node) {
 
     this->_id = id;
     this->_rows = rows;
 
-    for(int i=0;i<this->_rows;i++) {
-        this->_node[i] = nodes[i];
+    for(auto v : node) {
+        this->_node.push_back(v);
     }
 
     memset(_node_ocupied, 0, _rows*sizeof(bool));

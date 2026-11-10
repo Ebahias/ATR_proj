@@ -1,6 +1,6 @@
 #include "robo_manager.hpp"
 
-Robo_manager::Robo_manager(std::vector<Baia_carga*> b_carga, std::vector<Baia_descarga*> b_descarga, std::vector<Zona_recarga*> z_recarga) {
+Robo_manager::Robo_manager(std::vector<Baia_carga*>& b_carga, std::vector<Baia_descarga*>& b_descarga, std::vector<Zona_recarga*>& z_recarga) {
 
     _b_carga = b_carga;
     _b_descarga = b_descarga;
@@ -22,9 +22,10 @@ Robo* Robo_manager::get_avaiable_robo(void) {
 }
 
 int Robo_manager::add_robo(Robo* robo) {
-
+    
     _robo.push_back(robo);
 
+    return _robo.size();
 }
         
 int Robo_manager::set_robo_to_z_recarga(Robo* robo, Zona_recarga* z_recarga) {
@@ -60,5 +61,18 @@ Node* Robo_manager::get_nearest_node(Robo* robo) {
 
 int Robo_manager::wait(void) {
 
-    
+    return 0;    
+}
+
+int Robo_manager::get_new_tarefa(void) {
+
+    m.lock();
+
+    int ret = _num_tarefas;
+
+    _num_tarefas++;
+
+    m.unlock();
+
+    return ret;
 }

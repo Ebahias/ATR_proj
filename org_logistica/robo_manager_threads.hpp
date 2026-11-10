@@ -4,6 +4,10 @@
 
 #include "robo_manager.hpp"
 #include "robo_threads.hpp"
+#include "../gestor_robos/gestor_robos.hpp"
+#include "../comum/ipc_gestor.hpp"
+#include "../comum/log.hpp"
+
 #include <cstring>
 
 typedef struct {
@@ -29,6 +33,8 @@ void* Robo_manager_process_cargo_thread(void* arg);
 void* Robo_manager_recharge_thread(void* arg);
 
 void* Robo_manager_assign_robo_thread(void* arg);
+
+void* Robo_manager_new_robo_thread(void* arg);
 
 void init_Robo_manager_threads(Robo_manager_arg_t* Manager);
 
