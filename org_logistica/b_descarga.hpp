@@ -31,6 +31,8 @@ class Baia_descarga {
 
         sem_t avb_sem;
 
+        sem_t avaiable_sem;
+
         std::mutex m;
 
         int get_node_idx(int node_id);
@@ -51,6 +53,10 @@ class Baia_descarga {
 
         Carga cargo_response_clear(void);
         
+        std::vector<Node*> get_avaiable_spots(int type);
+
+        int free_occupied_spots(std::vector<Node*> nodes);
+
         int free_node(Node* node);
 };
 

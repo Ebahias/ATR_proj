@@ -7,6 +7,8 @@
 
 #include "comum/log.hpp"
 
+#define PERIODO_STATUS_ROBO_S 1
+
 void* robo_thread(void* arg) {
 
     robo_thread_arg_t* robo_arg = (robo_thread_arg_t*)arg;
@@ -18,6 +20,7 @@ void* robo_thread(void* arg) {
     struct timespec intervalo = { PERIODO_STATUS_ROBO_S, 0 };
 
     log_msg("ROBO THREAD", "ROBO %d SE DIRIGINDO ATE %f %f", robo->get_id(), robo_arg->final_pos->get_pos_x(), robo_arg->final_pos->get_pos_y());
+    
     while(true) {
 
         nanosleep(&intervalo, NULL);
@@ -31,6 +34,8 @@ void* robo_thread(void* arg) {
     
     sem_post(robo_arg->sem);
     
+    delete robo_arg;
+
     return nullptr;
 }
 
@@ -38,11 +43,12 @@ void send_robo_to_position(Robo* robo, Node* f_node, sem_t* sem, std::vector<int
 
     pthread_t thread_robo;
 
-    robo_thread_arg_t robo_arg = {0};
+    // cria o ponteiro (lembrar de deletar!!!!)
+    robo_thread_arg_t* robo_arg = new robo_thread_arg_t;
 
-    robo_arg.robo = robo;
-    robo_arg.sem = sem;
-    robo_arg.final_pos = f_node;
+    robo_arg->robo = robo;
+    robo_arg->sem = sem;
+    robo_arg->final_pos = f_node;
     
     //Manda o comando tarefa <tarefa_id> <cx> <cy> <ex> <ey> [--equipe <id>,<id>,...] 
 
@@ -87,5 +93,5 @@ void send_robo_to_position(Robo* robo, Node* f_node, sem_t* sem, std::vector<int
     pthread_create( &thread_robo,
                     NULL,
                     robo_thread,
-                    &robo_arg);
+                    robo_arg);
 }

@@ -41,6 +41,8 @@ class Baia_carga {
 
         int get_node_idx(int node_id);
 
+        sem_t avaiable_sem;
+
     public:
 
         std::vector<Node*> _node;
@@ -55,6 +57,10 @@ class Baia_carga {
 
         int pub_cargo(void);
 
+        std::vector<Node*> get_avaiable_nodes(int type);
+
+        int free_ocupied_nodes(std::vector<Node*>& nodes);
+        
         Carga cargo_request_unload(void);
         
         

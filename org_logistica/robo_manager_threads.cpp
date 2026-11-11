@@ -3,6 +3,8 @@
 
 #include <boost/asio.hpp>
 
+#define ESPERA_ASS_B_DESCARGA 20
+
 void* organizador_de_logistica_thread(void* arg) {
 
     Robo_manager_arg_t* manager_arg = (Robo_manager_arg_t*) arg;
@@ -14,11 +16,9 @@ void* organizador_de_logistica_thread(void* arg) {
 
     while(true) {
 
-        b_carga->pub_cargo();
-
         Carga carga = b_carga->cargo_request_unload();
         
-        log_msg("ORGANIZADOR", "CARGA CHEGOU EM B CARGA DE TAMANHO %d em BAIA %d", carga.get_type(), b_carga->get_id());
+        log_msg("ORGANIZADOR", "CARGA DE TAMANHO %d CHEGOU NA BAIA %d", carga.get_type(), b_carga->get_id());
 
         rcv_carga.push_back(carga);
 
@@ -49,7 +49,7 @@ void* organizador_de_logistica_thread(void* arg) {
 
             if(assign_arg->assign_robo.size() < p_carga->get_type()) {
                 
-                boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(30));
+                boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(5));
                 tout.wait();
 
             }
@@ -83,8 +83,6 @@ void* Robo_manager_assign_robo_thread(void* arg) {
 
     Carga* cargo = assign_arg->carga;
 
-    std::cout<< ass_robo.size() << std::endl;
-
     int tarefa = manager->get_new_tarefa();
 
     sem_t sem;
@@ -107,30 +105,40 @@ void* Robo_manager_assign_robo_thread(void* arg) {
         sem_wait(&sem);
     }
 
-    std::cout<<"ok!\n";
 
     for(auto r : ass_robo) 
         r->lift();
-    
+
+
+    // Libera os nós da baia de carga
+    baia->free_ocupied_nodes(cargo->_node);
+
     std::vector<Node*> nodes_bd;
 
 
     Baia_descarga* b_d = nullptr;
 
-    for(int i=0;i<cargo->get_type();i++) {
+    bool is_nodes_ok = false;
 
-        Node* node;
+    // nanosleep no lugar do steady_timer do Boost: o Boost não está
+    // instalado em todas as máquinas do grupo e só servia para dormir.
+    struct timespec itv_bd = { ESPERA_ASS_B_DESCARGA, 0 };
 
+    while(!is_nodes_ok) {
+        
         for(auto bd : manager->_b_descarga) {
-            
-            node = bd->receive_cargo(cargo->get_type());
-            
-            if(node != nullptr) {
 
-                nodes_bd.push_back(node);
+            nodes_bd = bd->get_avaiable_spots(cargo->get_type());
+
+            if(!nodes_bd.empty()){
                 b_d = bd;
+                is_nodes_ok = true;
                 break;
             }
+        }
+
+        if(!is_nodes_ok) {
+            nanosleep(&itv_bd, NULL);
         }
     }
 
@@ -147,11 +155,19 @@ void* Robo_manager_assign_robo_thread(void* arg) {
         sem_wait(&sem);
     }
 
-    for(auto n : nodes_bd) {
-        b_d->free_node(n);
+    for(auto r : ass_robo) {
+        r->_status = AVAIABLE;
     }
 
-    delete[] assign_arg;
+    b_d->free_occupied_spots(nodes_bd);
+
+    log_msg("ROBO ASSIGN", "EQUIPE TERMINOU DE ENTREGAR UMA CARGA DE TAMANHO %d", cargo->get_type());
+
+    delete assign_arg->carga;
+
+    delete assign_arg;
+    
+    return nullptr;
 }
 
 void* Robo_manager_new_robo_thread(void* arg) {
@@ -179,8 +195,8 @@ void* Robo_manager_new_robo_thread(void* arg) {
             Robo* robo_novo = new Robo(ev.robo_id, ev.pos_x, ev.pos_y, ev.pid);
 
             manager->add_robo(robo_novo);
-            
-            std::cout << "[THREAD NOVOS ROBOS] -> Novo Robo" << ev.robo_id <<" "<< ev.pos_x <<" "<< ev.pos_y << std::endl;
+
+            log_msg("NOVOS ROBOS", "NOVO ROBO %d EM %d x %d", ev.robo_id, ev.pos_x, ev.pos_y); 
 
         } else {
             log_msg("ESCUTA", "%s robo=%d pid=%d %s=%d slot=%d t=%ld.%09ld",
@@ -204,11 +220,7 @@ void init_Robo_manager_threads(Robo_manager_arg_t* Manager) {
                     organizador_de_logistica_thread,
                     Manager);
 
-    // pthread_create( &thread_novo_robo,
-                    // NULL,
-                    // Robo_manager_new_robo_thread,
-                    // Manager->manager);
-    // 
+    
     pthread_join(thread_manager, NULL);        
 
     return;

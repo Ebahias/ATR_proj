@@ -58,6 +58,7 @@ float Robo::get_pos_y(void) {
 
 
 int Robo::lift(void) {
+    log_msg("LIFT", "!!!!!!!!!!!!!!");
     return 0;
 }
 int Robo::go_to_pos(Node* i_node, Node* f_node) {

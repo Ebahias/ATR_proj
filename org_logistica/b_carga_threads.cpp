@@ -26,7 +26,7 @@ void* Baia_carga_load_thread(void* arg) {
 
         baia->add_cargo(carga_nova);
 
-        log_msg("CARGA THREAD", "CARGA ADICIONADA NA BAIA %d", baia->get_id());
+        log_msg("CARGA THREAD", "CARGA CRIADA NA BAIA %d", baia->get_id());
         
     }
 
@@ -34,15 +34,33 @@ void* Baia_carga_load_thread(void* arg) {
     return nullptr;
 }
 
+void* Baia_carga_process_thread(void* arg) {
+
+    Baia_carga* baia = (Baia_carga*)arg;
+
+    while(true) {
+
+        baia->pub_cargo();
+
+        log_msg("CARGA THREAD", "CARGA PROCESSADA NA BAIA %d", baia->get_id());
+
+    }
+
+}
+
 void init_baia_carga_threads(Baia_carga* Baia) {
    
-    pthread_t thread_load;
+    pthread_t thread_load, thread_pub;
 
     pthread_create( &thread_load,
                     NULL,
                     Baia_carga_load_thread,
                     Baia);
     
+    pthread_create( &thread_pub,
+                    NULL,
+                    Baia_carga_process_thread,
+                    Baia);
     
     return;
 }

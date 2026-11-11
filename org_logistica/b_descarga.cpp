@@ -16,6 +16,8 @@ Baia_descarga::Baia_descarga(int id,int rows, std::vector<Node*>& node) {
     sem_init(&this->bc_sem, 0, rows);
     sem_init(&avb_sem, 0, rows);
 
+    sem_init(&avaiable_sem, 0, rows);
+
 }
 
 Node* Baia_descarga::receive_cargo(int type) {
@@ -23,7 +25,7 @@ Node* Baia_descarga::receive_cargo(int type) {
     if(type > _qtd_node) {
         return nullptr;
     }
-    
+
     sem_wait(&avb_sem);
 
     Node* node = this->get_free_spot();
@@ -111,6 +113,55 @@ Node* Baia_descarga::get_free_spot(void) {
     m.unlock();
 
     return node;
+}
+
+std::vector<Node*> Baia_descarga::get_avaiable_spots(int type) {
+    
+    std::vector<Node*> ret;
+
+    m.lock();
+
+    for(auto v : _node) {
+
+        if(!v->is_locked()) {
+
+            ret.push_back(v);
+        }
+
+    }
+
+    m.unlock();
+
+    if(ret.size() < type)
+        ret.clear();
+    
+    if(ret.empty())
+        return ret;
+
+    m.lock();
+
+    for(auto v : ret) {
+
+        v->set_locked();
+
+    }
+    
+    m.unlock();
+
+    return ret;
+}
+
+int Baia_descarga::free_occupied_spots(std::vector<Node*> nodes) {
+
+     std::lock_guard<std::mutex> lock(m);
+
+    for(auto v : nodes) {
+
+        v->set_free();
+
+    }
+
+    return nodes.size();
 }
 
 int Baia_descarga::free_node(Node* node) {
