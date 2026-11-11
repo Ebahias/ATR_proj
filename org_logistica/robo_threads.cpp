@@ -1,23 +1,26 @@
 #include "robo_threads.hpp"
 
+#include <time.h>
 #include <unistd.h>
-#include <boost/asio.hpp>
 #include <sys/types.h>
 #include <sys/wait.h>
+
+// Intervalo entre leituras do status do robô na /atr_frota
+#define PERIODO_STATUS_ROBO_S   1
 
 void* robo_thread(void* arg) {
 
     robo_thread_arg_t* robo_arg = (robo_thread_arg_t*)arg;
-    
+
     Robo* robo = robo_arg->robo;
 
-    boost::asio::io_context io;
+    // nanosleep no lugar do steady_timer do Boost: o Boost não está
+    // instalado em todas as máquinas do grupo e só servia para dormir.
+    struct timespec intervalo = { PERIODO_STATUS_ROBO_S, 0 };
 
     while(true) {
-        
-        boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(1));
-        
-        tout.wait();
+
+        nanosleep(&intervalo, NULL);
 
         robo->update_status();
 

@@ -233,7 +233,23 @@ int GestorRobos::criar_robo(const MsgNovoRobo& msg) {
         if(getppid() != pid_gestor)
             _exit(1);
 
-        // close_range(3, ~0U, 0);
+        // Fecha os descritores herdados do Gestor (socket MQTT, filas,
+        // memória compartilhada): o robô só precisa de 0, 1 e 2 e abre o
+        // resto pelo nome. close_range() é imediato, mas exige glibc 2.34+
+        // e kernel 5.9+; onde não existe ou falha, o laço até _SC_OPEN_MAX
+        // faz o mesmo (lento com limite alto de descritores: ~0,7 s para
+        // 1M, mas compila e roda em qualquer máquina). Entre fork e exec
+        // só entram funções async-signal-safe, e estas são.
+        bool fechou = false;
+#if defined(__GLIBC__) && __GLIBC_PREREQ(2, 34)
+        fechou = (close_range(3, ~0U, 0) == 0);
+#endif
+        if(!fechou) {
+            long max_fd = sysconf(_SC_OPEN_MAX);
+            for(int fd = 3; fd < max_fd; fd++)
+                close(fd);
+        }
+
         execv(argv[0], argv);
         _exit(127);
     }
