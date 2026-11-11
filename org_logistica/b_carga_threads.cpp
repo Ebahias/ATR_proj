@@ -1,7 +1,11 @@
 #include "b_carga_threads.hpp"
 
-#include <boost/asio.hpp>
 #include "comum/log.hpp"
+
+#include <time.h>
+
+// Intervalo entre a chegada de cargas novas numa baia
+#define PERIODO_NOVA_CARGA_S    5
 
 /**
  * Thread para simular a chegada de uma carga nova na Baia de carga
@@ -9,15 +13,14 @@
 void* Baia_carga_load_thread(void* arg) {
 
     Baia_carga* baia = (Baia_carga*)arg;
-        
 
-    boost::asio::io_context io;
+    // nanosleep no lugar do steady_timer do Boost: o Boost não está
+    // instalado em todas as máquinas do grupo e só servia para dormir.
+    struct timespec intervalo = { PERIODO_NOVA_CARGA_S, 0 };
 
     while(true) {
 
-        boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(5));
-        
-        tout.wait();
+        nanosleep(&intervalo, NULL);
 
         Carga carga_nova(1);
 

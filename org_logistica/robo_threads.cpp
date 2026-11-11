@@ -1,7 +1,7 @@
 #include "robo_threads.hpp"
 
+#include <time.h>
 #include <unistd.h>
-#include <boost/asio.hpp>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -10,17 +10,17 @@
 void* robo_thread(void* arg) {
 
     robo_thread_arg_t* robo_arg = (robo_thread_arg_t*)arg;
-    
+
     Robo* robo = robo_arg->robo;
 
-    boost::asio::io_context io;
+    // nanosleep no lugar do steady_timer do Boost: o Boost não está
+    // instalado em todas as máquinas do grupo e só servia para dormir.
+    struct timespec intervalo = { PERIODO_STATUS_ROBO_S, 0 };
 
     log_msg("ROBO THREAD", "ROBO %d SE DIRIGINDO ATE %f %f", robo->get_id(), robo_arg->final_pos->get_pos_x(), robo_arg->final_pos->get_pos_y());
     while(true) {
-        
-        boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(1));
-        
-        tout.wait();
+
+        nanosleep(&intervalo, NULL);
 
         robo->update_status();
 

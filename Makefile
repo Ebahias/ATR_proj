@@ -1,5 +1,5 @@
 CXX      ?= g++
-CXXFLAGS ?= -std=c++2a -Wall -Wextra -O2
+CXXFLAGS ?= -std=c++20 -Wall -Wextra -O2
 CXXFLAGS += -pthread -I. -MMD -MP
 LDLIBS   += -pthread -lrt
 

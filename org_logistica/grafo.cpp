@@ -1,5 +1,6 @@
 #include "grafo.hpp"
 
+#include <algorithm>
 
 Node::Node(int id, float pos_x, float pos_y) {
     _id = id;
