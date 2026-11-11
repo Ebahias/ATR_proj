@@ -111,13 +111,14 @@ int Robo::update_status(void) {
 
     shm_frota_fechar(shm);
 
-    log_msg("ROBO", "ROBO %d -> X: %f Y: %f FASE: %d BATERIA: %d ESTADO: %D",
+    log_msg("ROBO", "ROBO %d -> X: %f Y: %f FASE: %d BATERIA: %d ESTADO: %d",
+            _id,
             _pos_x,
             _pos_y,
             _fase,
             _bateria,
             _estado);
-            
+
     return 0;
 }
 

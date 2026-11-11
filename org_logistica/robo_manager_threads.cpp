@@ -1,6 +1,8 @@
 #include "robo_manager_threads.hpp"
 #include "comum/log.hpp"
 
+#include <boost/asio.hpp>
+
 void* organizador_de_logistica_thread(void* arg) {
 
     Robo_manager_arg_t* manager_arg = (Robo_manager_arg_t*) arg;
@@ -31,12 +33,26 @@ void* organizador_de_logistica_thread(void* arg) {
 
         Robo_assign_arg_t* assign_arg = new Robo_assign_arg_t;
 
-        for(int i=0;i<p_carga->get_type();i++) {
+        boost::asio::io_context io;
 
-            Robo* av_robo = manager->get_avaiable_robo();
-            
-            if(av_robo != nullptr) 
-                assign_arg->assign_robo.push_back(av_robo);
+        while(assign_arg->assign_robo.size() < p_carga->get_type()) {
+        
+            for(int i=0;i<p_carga->get_type();i++) {
+
+                Robo* av_robo = manager->get_avaiable_robo();
+
+                if(av_robo != nullptr) {
+                    av_robo->_status  = GOING_TO_BAIA_CARGA;
+                    assign_arg->assign_robo.push_back(av_robo);
+                }
+            }
+
+            if(assign_arg->assign_robo.size() < p_carga->get_type()) {
+                
+                boost::asio::steady_timer tout(io, boost::asio::chrono::seconds(30));
+                tout.wait();
+
+            }
         }
 
         pthread_t thread_assign;
@@ -71,10 +87,6 @@ void* Robo_manager_assign_robo_thread(void* arg) {
 
     int tarefa = manager->get_new_tarefa();
 
-    log_msg("ASSIGN", "NOVA TAREFA DE ASSIGN %d PARA CARGA DE TAMANHO %d COM O ROBO  NA BAIA %d",
-             tarefa, cargo->get_type(), baia->get_id());
-
-    
     sem_t sem;
 
     sem_init(&sem, 0, 0);
@@ -95,10 +107,13 @@ void* Robo_manager_assign_robo_thread(void* arg) {
         sem_wait(&sem);
     }
 
+    std::cout<<"ok!\n";
+
     for(auto r : ass_robo) 
         r->lift();
     
     std::vector<Node*> nodes_bd;
+
 
     Baia_descarga* b_d = nullptr;
 
@@ -154,8 +169,6 @@ void* Robo_manager_new_robo_thread(void* arg) {
     EventoGestor ev;
 
     while(mq_gestor_receber(mq, ev) == 0) {
-
-        std::cout<<"ok\n";
 
         if(ev.tipo == EVENTO_ROBO_NOVO) {
             log_msg("ESCUTA", "%s robo=%d pid=%d pos=(%d, %d) slot=%d t=%ld.%09ld",

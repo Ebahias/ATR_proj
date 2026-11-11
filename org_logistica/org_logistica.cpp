@@ -157,6 +157,10 @@ int main(void) {
 
     }
 
+    while(true) {
+
+        sleep(10);
+    }
     // Deleção do grafo
     for(auto v : grafo) {
         delete v;

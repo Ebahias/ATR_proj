@@ -25,8 +25,6 @@ class Robo {
         float _pos_x;
         float _pos_y;
 
-        robo_status_enum _status;
-
         sem_t proceed_sem;
 
         std::mutex m;
@@ -42,6 +40,8 @@ class Robo {
         int _fase;
 
     public:
+
+        robo_status_enum _status;
 
         pid_t _pid;                  
 
