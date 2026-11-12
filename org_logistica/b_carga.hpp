@@ -5,6 +5,7 @@
 #include "carga.hpp"
 #include <stack>
 #include <queue>
+#include <deque>
 #include "pthread.h"
 #include <mutex>
 
@@ -29,7 +30,9 @@ class Baia_carga {
 
         std::queue<Carga> _cargo;
 
-        std::queue<Carga> _load;
+        // Cargas que chegaram e ainda não têm pontos na baia. deque (e não
+        // queue) para pub_cargo poder escolher a maior, não só a primeira.
+        std::deque<Carga> _load;
 
         sem_t bc_sem;
 

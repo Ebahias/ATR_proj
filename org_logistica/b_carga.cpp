@@ -32,7 +32,7 @@ int Baia_carga::add_cargo(Carga cargo) {
 
     m.lock();
 
-    this->_load.push(cargo);
+    this->_load.push_back(cargo);
 
     m.unlock();
 
@@ -76,21 +76,37 @@ Carga Baia_carga::consume_cargo(void) {
 int Baia_carga::pub_cargo(void) {
 
     sem_wait(&this->arive_sem);
-    
-    if(_load.empty())
-        return -1;
 
+    // A thread de chegada de cargas faz push em _load ao mesmo tempo: a
+    // consulta precisa do mutex tanto quanto o front().
     m.lock();
 
-        Carga cargo = _load.front();
+    if(_load.empty()) {
+        m.unlock();
+        return -1;
+    }
+
+    // Prioridade para a maior carga; entre as de mesmo tamanho, a mais
+    // antiga. As grandes precisam de mais robôs livres ao mesmo tempo e, por
+    // ordem de chegada, ficavam esperando atrás das pequenas.
+    size_t escolhida = 0;
+
+    for(size_t i=1;i<_load.size();i++) {
+        if(_load[i].get_type() > _load[escolhida].get_type())
+            escolhida = i;
+    }
+
+        Carga cargo = _load[escolhida];
 
     m.unlock();
 
     std::vector<Node*> av_node = this->get_avaiable_nodes(cargo.get_type());
 
+    // Só esta thread remove de _load e a de chegada só acrescenta no fim:
+    // o índice escolhido continua apontando para a mesma carga
     m.lock();
 
-    _load.pop();
+    _load.erase(_load.begin() + escolhida);
 
     m.unlock();
 
@@ -120,9 +136,15 @@ Carga Baia_carga::cargo_request_unload(void) {
 
     sem_wait(&cargo_wait_sem);
 
-    Carga ret = _cargo.back();
+    // front(), não back(): pop() remove o da frente. Com back() a carga
+    // devolvida era a mais nova e a removida, a mais antiga (que se perdia).
+    m.lock();
+
+    Carga ret = _cargo.front();
 
     _cargo.pop();
+
+    m.unlock();
 
     return ret;
 }

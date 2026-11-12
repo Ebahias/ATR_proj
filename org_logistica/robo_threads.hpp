@@ -3,19 +3,9 @@
 
 #include "robo.hpp"
 
-
-typedef struct {
-
-    Robo* robo;
-    
-    Node* final_pos;
-
-    sem_t* sem;
-    
-}robo_thread_arg_t;
-
-void* robo_thread(void* arg);
-
-void send_robo_to_position(Robo* robo, Node* f_node, sem_t* sem, std::vector<int>& equipe, int tarefa);
+/*
+ * As funções que enviavam os robôs por bin/comando_robo foram substituídas
+ * pelo despacho (despacho.hpp). Ver robo_threads.cpp.
+ */
 
 #endif
