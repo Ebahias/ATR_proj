@@ -58,7 +58,55 @@ float Robo::get_pos_y(void) {
 
 
 int Robo::lift(void) {
-    log_msg("LIFT", "!!!!!!!!!!!!!!");
+
+    pid_t pid = fork();
+
+    if(pid < 0) {
+        log_msg("LIFT ROBO", "FORK COM ERRO");
+    }
+    if(pid == 0) {
+
+        std::string id_s = std::to_string(_id);
+
+        execlp("./bin/comando_robo",
+        "comando",
+        id_s.c_str(),
+        "acoplar",
+        (char*)NULL);
+
+        log_msg("lift ROBO", "COMANDO CRIADO");
+
+        _exit(1);
+    }
+
+    log_msg("ROBO", "ROBO %d ACOPLAR", _id);
+    return 0;
+}
+
+int Robo::release(void) {
+
+    pid_t pid = fork();
+
+    if(pid < 0) {
+        log_msg("LIFT ROBO", "FORK COM ERRO");
+    }
+    if(pid == 0) {
+
+        std::string id_s = std::to_string(_id);
+
+        execlp("./bin/comando_robo",
+        "comando",
+        id_s.c_str(),
+        "soltar",
+        (char*)NULL);
+
+        log_msg("lift ROBO", "COMANDO CRIADO");
+
+        _exit(1);
+    }
+
+    log_msg("ROBO", "ROBO %d SOLTAR", _id);
+
     return 0;
 }
 int Robo::go_to_pos(Node* i_node, Node* f_node) {

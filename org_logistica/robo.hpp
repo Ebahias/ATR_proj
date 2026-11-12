@@ -6,6 +6,12 @@
 #include "grafo.hpp"
 #include "comum/ipc_robo.hpp"
 
+#include <time.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+
 typedef enum {
 
     AVAIABLE,
@@ -66,6 +72,8 @@ class Robo {
         float get_pos_y(void);
 
         int lift(void);
+
+        int release(void);
 
         // Função que atualiza estados a partir do IPC
         int update_status(void);

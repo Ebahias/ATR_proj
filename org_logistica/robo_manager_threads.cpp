@@ -155,6 +155,9 @@ void* Robo_manager_assign_robo_thread(void* arg) {
         sem_wait(&sem);
     }
 
+    for(auto r : ass_robo) 
+        r->release();
+
     for(auto r : ass_robo) {
         r->_status = AVAIABLE;
     }
