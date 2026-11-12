@@ -41,7 +41,8 @@ ESCUTA_COL_SRC := ferramentas/escuta_coletor.cpp comum/ipc_coletor.cpp $(IPC_ROB
 ORGANIZADOR_SRC 	  := org_logistica/org_logistica.cpp org_logistica/robo_manager_threads.cpp org_logistica/b_carga_threads.cpp \
 						 org_logistica/grafo_armazem.cpp org_logistica/robo_threads.cpp org_logistica/robo_manager.cpp org_logistica/robo.cpp \
 						 org_logistica/b_carga.cpp org_logistica/b_descarga.cpp org_logistica/z_recarga.cpp \
-						 org_logistica/robo.cpp org_logistica/carga.cpp org_logistica/grafo.cpp	$(IPC_GESTOR)	$(IPC_ROBO) 
+						 org_logistica/robo.cpp org_logistica/carga.cpp org_logistica/grafo.cpp	org_logistica/despacho.cpp \
+						 $(IPC_GESTOR)	$(IPC_ROBO)
 
 PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gestor \
              $(BIN)/comando_robo $(BIN)/monitor_frota $(BIN)/mapa \
