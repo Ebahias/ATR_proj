@@ -67,6 +67,25 @@ bool despacho_ler_status(int robo_id, DadosStatus& d) {
     return buscar_robo(robo_id, d) >= 0;
 }
 
+int despacho_ler_frota(std::vector<DadosStatus>& ativos) {
+
+    ativos.clear();
+
+    if(g_shm == NULL)
+        return 0;
+
+    for(int s=0;s<MAX_ROBOS;s++) {
+
+        DadosStatus d;
+        shm_slot_ler(g_shm, s, d);
+
+        if(d.ativo)
+            ativos.push_back(d);
+    }
+
+    return (int)ativos.size();
+}
+
 uint32_t despacho_mascara_equipe(const std::vector<int>& ids) {
 
     uint32_t mascara = 0;
@@ -86,10 +105,10 @@ uint32_t despacho_mascara_equipe(const std::vector<int>& ids) {
     return mascara;
 }
 
-bool despacho_enviar(int robo_id, const ComandoRobo& cmd) {
+bool despacho_enviar(int robo_id, const ComandoRobo& cmd, int origem) {
 
     ComandoRobo c = cmd;
-    c.origem = ORIGEM_ORGANIZADOR;
+    c.origem = origem;
     clock_gettime(CLOCK_REALTIME, &c.timestamp);
 
     // Abre e fecha a cada envio: a fila é do robô e some quando ele morre
@@ -200,6 +219,10 @@ bool despacho_esperar_fase(const std::vector<int>& ids, int tarefa_id, int fase,
 
     struct timespec intervalo = { 0, PERIODO_ESPERA_FASE_MS * 1000000L };
 
+    // Robôs que já apareceram na tabela com esta tarefa: se um deles depois
+    // aparece sem ela, a tarefa foi cancelada no robô
+    std::vector<bool> visto(ids.size(), false);
+
     while(true) {
 
         if(g_interrompido) {
@@ -209,7 +232,9 @@ bool despacho_esperar_fase(const std::vector<int>& ids, int tarefa_id, int fase,
 
         int prontos = 0;
 
-        for(int id : ids) {
+        for(size_t i=0;i<ids.size();i++) {
+
+            int id = ids[i];
 
             DadosStatus d;
 
@@ -218,11 +243,25 @@ bool despacho_esperar_fase(const std::vector<int>& ids, int tarefa_id, int fase,
                 return false;
             }
 
+            // Em manual o robô ignora o Organizador (e a troca de modo já
+            // cancelou a tarefa nele): não adianta esperar o timeout
+            if(d.modo == MODO_MANUAL) {
+                log_msg("DESPACHO", "tarefa %d: robô %d passou para o modo manual", tarefa_id, id);
+                return false;
+            }
+
             // Logo depois do CMD_TAREFA a tabela ainda pode mostrar a tarefa
             // anterior do robô (inclusive FASE_FALHOU dela). Só a fase desta
             // tarefa conta, para sucesso ou para falha.
-            if(d.tarefa_id != tarefa_id)
+            if(d.tarefa_id != tarefa_id) {
+                if(visto[i]) {
+                    log_msg("DESPACHO", "tarefa %d: cancelada no robô %d (fase %s)", tarefa_id, id, fase_tarefa_nome(d.fase));
+                    return false;
+                }
                 continue;
+            }
+
+            visto[i] = true;
 
             if(d.fase == FASE_FALHOU) {
                 log_msg("DESPACHO", "tarefa %d: robô %d falhou (estado %s)", tarefa_id, id, estado_robo_nome(d.estado));

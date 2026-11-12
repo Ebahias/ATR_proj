@@ -1,5 +1,6 @@
 #include "robo_manager_threads.hpp"
 #include "despacho.hpp"
+#include "ponte_mqtt.hpp"
 #include "comum/log.hpp"
 #include "comum/mapa.hpp"
 
@@ -127,7 +128,7 @@ void* organizador_de_logistica_thread(void* arg) {
         // Tudo ou nada (ver Robo_manager): não segura parte da equipe
         // enquanto espera o resto. O pedido registrado faz as cargas menores
         // das outras baias cederem a vez a esta, se ela for maior.
-        manager->registrar_pedido(n);
+        manager->registrar_pedido(b_carga->get_id(), n);
 
         while(!manager->reservar_equipe(n, ref_x, ref_y, assign_arg->assign_robo)) {
 
@@ -143,7 +144,7 @@ void* organizador_de_logistica_thread(void* arg) {
             nanosleep(&espera_robos, NULL);
         }
 
-        manager->retirar_pedido(n);
+        manager->retirar_pedido(b_carga->get_id(), n);
 
         if(assign_arg->assign_robo.empty()) {
             b_carga->free_ocupied_nodes(p_carga->_node);
@@ -157,8 +158,21 @@ void* organizador_de_logistica_thread(void* arg) {
         assign_arg->carga = p_carga;
         assign_arg->manager = manager;
         assign_arg->b_carga = b_carga;
+        assign_arg->tarefa = manager->get_new_tarefa();
 
-        manager->missao_iniciou();
+        // Registrada antes de criar a thread: assim o encerramento sempre a
+        // espera, e a carga nunca some da publicação entre "pendente" e
+        // "em transporte"
+        MissaoInfo info;
+        info.tarefa = assign_arg->tarefa;
+        info.baia = b_carga->get_id();
+        info.zona = -1;
+        info.tamanho = n;
+        for(auto r : assign_arg->assign_robo)
+            info.robos.push_back(r->get_id());
+
+        manager->missao_iniciou(info);
+        ponte_mqtt_cargas_mudaram();
 
         if(pthread_create( &thread_assign,
                            NULL,
@@ -172,9 +186,10 @@ void* organizador_de_logistica_thread(void* arg) {
 
             b_carga->free_ocupied_nodes(p_carga->_node);
             b_carga->add_cargo(Carga(n));
+            manager->missao_terminou(assign_arg->tarefa, false);
+            ponte_mqtt_cargas_mudaram();
             delete p_carga;
             delete assign_arg;
-            manager->missao_terminou(false);
             continue;
         }
 
@@ -215,7 +230,7 @@ void* Robo_manager_assign_robo_thread(void* arg) {
 
     const char* nome_baia = nome_area(AREA_BAIA, baia->get_id());
 
-    int tarefa = manager->get_new_tarefa();
+    int tarefa = assign_arg->tarefa;
 
     double inicio = agora_s();
 
@@ -288,6 +303,9 @@ void* Robo_manager_assign_robo_thread(void* arg) {
             motivo = "Organizador encerrando";
             break;
         }
+
+        manager->missao_definir_zona(tarefa, zona);
+        ponte_mqtt_cargas_mudaram();
 
         log_msg("ORGANIZADOR", "TAREFA %d: CARGA DE TAMANHO %d, %s -> %s, EQUIPE %s",
                 tarefa, n, nome_baia, nome_area(AREA_ZONA, zona), nomes.c_str());
@@ -367,8 +385,11 @@ void* Robo_manager_assign_robo_thread(void* arg) {
 
     delete assign_arg;
 
-    // Por último: depois disto o encerramento pode fechar a /atr_frota
-    manager->missao_terminou(entregue);
+    // Por último: depois disto o encerramento pode fechar a /atr_frota.
+    // ponte_mqtt_cargas_mudaram só sinaliza uma variável de condição
+    // estática, então pode ser chamada mesmo com a ponte já encerrada.
+    manager->missao_terminou(tarefa, entregue);
+    ponte_mqtt_cargas_mudaram();
 
     return nullptr;
 }

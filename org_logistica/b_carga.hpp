@@ -28,7 +28,9 @@ class Baia_carga {
 
         int _rows;
 
-        std::queue<Carga> _cargo;
+        // Cargas já com pontos na baia, à espera do Organizador. deque (e
+        // não queue) para listar_pendentes poder percorrer sem consumir.
+        std::deque<Carga> _cargo;
 
         // Cargas que chegaram e ainda não têm pontos na baia. deque (e não
         // queue) para pub_cargo poder escolher a maior, não só a primeira.
@@ -65,7 +67,11 @@ class Baia_carga {
         int free_ocupied_nodes(std::vector<Node*>& nodes);
         
         Carga cargo_request_unload(void);
-        
+
+        // Tamanhos das cargas ainda na baia (_load e _cargo), sem consumi-las.
+        // Para a ponte MQTT publicar a fila de cada baia.
+        void listar_pendentes(std::vector<int>& tamanhos);
+
         
 };
 

@@ -68,7 +68,7 @@ Carga Baia_carga::consume_cargo(void) {
 
     Carga cargo_ret = _cargo.front();
 
-    _cargo.pop();
+    _cargo.pop_front();
 
     return cargo_ret;
 }
@@ -121,7 +121,7 @@ int Baia_carga::pub_cargo(void) {
     
     m.lock();
 
-    _cargo.push(cargo);
+    _cargo.push_back(cargo);
 
     m.unlock();
 
@@ -142,11 +142,24 @@ Carga Baia_carga::cargo_request_unload(void) {
 
     Carga ret = _cargo.front();
 
-    _cargo.pop();
+    _cargo.pop_front();
 
     m.unlock();
 
     return ret;
+}
+
+void Baia_carga::listar_pendentes(std::vector<int>& tamanhos) {
+
+    std::lock_guard<std::mutex> lock(m);
+
+    tamanhos.clear();
+
+    for(auto& c : _cargo)
+        tamanhos.push_back(c.get_type());
+
+    for(auto& c : _load)
+        tamanhos.push_back(c.get_type());
 }
 
 std::vector<Node*> Baia_carga::get_avaiable_nodes(int type) {

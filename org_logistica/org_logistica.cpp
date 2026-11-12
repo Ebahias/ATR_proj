@@ -17,7 +17,10 @@
  *                    transporte (robo_manager_threads.cpp)
  *
  * Os comandos para os robôs saem pelo despacho (despacho.hpp), direto nas
- * filas POSIX de cada robô.
+ * filas POSIX de cada robô. A ponte MQTT (ponte_mqtt.hpp) publica o estado
+ * para a Tela de Operação e recebe os comandos dela; sem broker, o
+ * Organizador funciona igual. Broker em ATR_MQTT_HOST/ATR_MQTT_PORT (padrão
+ * localhost:1883).
  */
 
 #include <iostream>
@@ -37,6 +40,7 @@
 #include "robo_threads.hpp"
 #include "b_carga_threads.hpp"
 #include "despacho.hpp"
+#include "ponte_mqtt.hpp"
 
 #include "comum/log.hpp"
 #include "comum/mapa.hpp"
@@ -173,6 +177,10 @@ int main(void) {
 
     Robo_manager manager(b_carga_list, b_descarga_list, z_recarga_list);
 
+    // Antes das threads das baias: as primeiras cargas já saem publicadas.
+    // Sem broker a ponte só registra e segue tentando em segundo plano.
+    ponte_mqtt_iniciar(&manager);
+
     // Threads que rodam até o encerramento (as das missões terminam sozinhas)
     std::vector<pthread_t> threads;
 
@@ -221,7 +229,12 @@ int main(void) {
         pthread_join(t, NULL);
 
     // 3. As missões abortam, liberam robôs e pontos e avisam o manager
-    if(!manager.esperar_missoes(ESPERA_MISSOES_MS)) {
+    bool missoes_terminaram = manager.esperar_missoes(ESPERA_MISSOES_MS);
+
+    // 4. A ponte lê a /atr_frota e o manager: para antes de fechar a memória
+    ponte_mqtt_encerrar();
+
+    if(!missoes_terminaram) {
         // Uma missão ainda usa a /atr_frota e os objetos do main: sai sem
         // destruí-los (exit não chama destrutores de variáveis locais)
         log_msg("ORGANIZADOR", "missões ainda em andamento após %d ms; saindo assim mesmo", ESPERA_MISSOES_MS);

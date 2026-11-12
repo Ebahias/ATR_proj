@@ -7,7 +7,26 @@
 #include "z_recarga.hpp"
 
 #include <atomic>
+#include <map>
 #include <pthread.h>
+#include <utility>
+
+
+// Uma missão em andamento (carga em transporte)
+struct MissaoInfo {
+    int tarefa;
+    int baia;                   // índice em _b_carga (0 = Baia 1)
+    int zona;                   // índice em _b_descarga (0 = Zona A), -1 enquanto não escolhida
+    int tamanho;
+    std::vector<int> robos;     // ids
+};
+
+// Cópia consistente do estado das cargas, para a ponte MQTT (atr/cargas)
+struct EstadoCargas {
+    std::vector<std::vector<int>> pendentes;    // por baia: tamanhos das cargas ainda na baia
+    std::vector<MissaoInfo> em_transporte;
+    int entregues;
+};
 
 
 /*
@@ -42,17 +61,19 @@ class Robo_manager {
         // Protege _robo, _num_tarefas e as reservas (_reservado/_removido)
         std::mutex m;
 
-        // Missões em andamento: o encerramento espera elas liberarem o que
-        // reservaram antes de fechar a /atr_frota.
+        // Missões em andamento, por tarefa_id: o encerramento espera elas
+        // liberarem o que reservaram antes de fechar a /atr_frota, e a ponte
+        // MQTT as publica como "em transporte".
         pthread_mutex_t _mtx_missoes;
         pthread_cond_t _cv_missoes;
-        int _missoes_ativas;
+        std::map<int, MissaoInfo> _missoes;
         int _entregues;
 
         std::atomic<bool> _encerrando;
 
-        // Tamanho da carga de cada baia esperando equipe
-        std::vector<int> _pedidos;
+        // (baia, tamanho) de cada carga cuja baia está esperando equipe.
+        // Protegido por m.
+        std::vector<std::pair<int, int>> _pedidos;
 
         // Chamados com m travado
         bool pode_receber_tarefa(Robo* robo, DadosStatus& d);
@@ -80,10 +101,11 @@ class Robo_manager {
         // se há um pedido maior esperando.
         bool reservar_equipe(int n, float ref_x, float ref_y, std::vector<Robo*>& equipe);
 
-        // Uma baia começa / para de esperar uma equipe de n robôs
-        void registrar_pedido(int n);
+        // Uma baia (índice em _b_carga) começa / para de esperar uma equipe
+        // de n robôs
+        void registrar_pedido(int baia, int n);
 
-        void retirar_pedido(int n);
+        void retirar_pedido(int baia, int n);
 
         void liberar_robo(Robo* robo);
 
@@ -93,11 +115,17 @@ class Robo_manager {
         // Robôs que o Gestor anunciou e ainda não removeu.
         int num_robos_ativos(void);
 
-        void missao_iniciou(void);
+        void missao_iniciou(const MissaoInfo& missao);
 
-        void missao_terminou(bool entregue);
+        void missao_definir_zona(int tarefa, int zona);
+
+        void missao_terminou(int tarefa, bool entregue);
 
         int entregues(void);
+
+        // Cargas pendentes por baia (inclusive a que espera equipe), missões
+        // em andamento e total entregue
+        EstadoCargas estado_cargas(void);
 
         // Espera até timeout_ms as missões em andamento terminarem.
         // Retorna false se ainda há alguma.

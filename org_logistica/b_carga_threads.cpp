@@ -1,5 +1,6 @@
 #include "b_carga_threads.hpp"
 
+#include "ponte_mqtt.hpp"
 #include "comum/log.hpp"
 
 #include <stdlib.h>
@@ -35,6 +36,8 @@ void* Baia_carga_load_thread(void* arg) {
         Carga carga_nova(1 + rand_r(&semente) % TAMANHO_MAX_CARGA);
 
         baia->add_cargo(carga_nova);
+
+        ponte_mqtt_cargas_mudaram();
 
         log_msg("CARGA THREAD", "CARGA DE TAMANHO %d CRIADA NA BAIA %d", carga_nova.get_type(), baia->get_id());
 

@@ -16,7 +16,6 @@ Robo_manager::Robo_manager(std::vector<Baia_carga*>& b_carga, std::vector<Baia_d
     // O robô recusa CMD_TAREFA com tarefa_id <= 0
     _num_tarefas = 1;
 
-    _missoes_ativas = 0;
     _entregues = 0;
     _encerrando = false;
 
@@ -99,26 +98,26 @@ int Robo_manager::maior_pedido_atendivel(void) {
 
     int maior = 0;
 
-    for(int p : _pedidos) {
-        if(p <= capacidade && p > maior)
-            maior = p;
+    for(auto& p : _pedidos) {
+        if(p.second <= capacidade && p.second > maior)
+            maior = p.second;
     }
 
     return maior;
 }
 
-void Robo_manager::registrar_pedido(int n) {
+void Robo_manager::registrar_pedido(int baia, int n) {
 
     std::lock_guard<std::mutex> lock(m);
 
-    _pedidos.push_back(n);
+    _pedidos.push_back(std::make_pair(baia, n));
 }
 
-void Robo_manager::retirar_pedido(int n) {
+void Robo_manager::retirar_pedido(int baia, int n) {
 
     std::lock_guard<std::mutex> lock(m);
 
-    auto it = std::find(_pedidos.begin(), _pedidos.end(), n);
+    auto it = std::find(_pedidos.begin(), _pedidos.end(), std::make_pair(baia, n));
 
     if(it != _pedidos.end())
         _pedidos.erase(it);
@@ -190,21 +189,69 @@ int Robo_manager::num_robos_ativos(void) {
     return n;
 }
 
-void Robo_manager::missao_iniciou(void) {
+void Robo_manager::missao_iniciou(const MissaoInfo& missao) {
 
     pthread_mutex_lock(&_mtx_missoes);
-    _missoes_ativas++;
+    _missoes[missao.tarefa] = missao;
     pthread_mutex_unlock(&_mtx_missoes);
 }
 
-void Robo_manager::missao_terminou(bool entregue) {
+void Robo_manager::missao_definir_zona(int tarefa, int zona) {
 
     pthread_mutex_lock(&_mtx_missoes);
-    _missoes_ativas--;
+
+    auto it = _missoes.find(tarefa);
+
+    if(it != _missoes.end())
+        it->second.zona = zona;
+
+    pthread_mutex_unlock(&_mtx_missoes);
+}
+
+void Robo_manager::missao_terminou(int tarefa, bool entregue) {
+
+    pthread_mutex_lock(&_mtx_missoes);
+    _missoes.erase(tarefa);
     if(entregue)
         _entregues++;
     pthread_cond_broadcast(&_cv_missoes);
     pthread_mutex_unlock(&_mtx_missoes);
+}
+
+// Cada parte é copiada sob o seu mutex (pedidos com m, filas com o mutex da
+// baia, missões com _mtx_missoes), nunca dois ao mesmo tempo: não cria uma
+// ordem de travamento nova entre eles. Uma carga que acabou de passar de uma
+// parte para a outra pode aparecer na publicação seguinte, não nesta.
+EstadoCargas Robo_manager::estado_cargas(void) {
+
+    EstadoCargas e;
+
+    e.pendentes.resize(_b_carga.size());
+
+    for(size_t b=0;b<_b_carga.size();b++)
+        _b_carga[b]->listar_pendentes(e.pendentes[b]);
+
+    {
+        std::lock_guard<std::mutex> lock(m);
+
+        // A carga que a thread da baia já tirou da fila e está esperando
+        // equipe continua pendente
+        for(auto& p : _pedidos) {
+            if(p.first >= 0 && p.first < (int)e.pendentes.size())
+                e.pendentes[p.first].insert(e.pendentes[p.first].begin(), p.second);
+        }
+    }
+
+    pthread_mutex_lock(&_mtx_missoes);
+
+    for(auto& par : _missoes)
+        e.em_transporte.push_back(par.second);
+
+    e.entregues = _entregues;
+
+    pthread_mutex_unlock(&_mtx_missoes);
+
+    return e;
 }
 
 int Robo_manager::entregues(void) {
@@ -229,12 +276,12 @@ bool Robo_manager::esperar_missoes(int timeout_ms) {
 
     pthread_mutex_lock(&_mtx_missoes);
 
-    while(_missoes_ativas > 0) {
+    while(!_missoes.empty()) {
         if(pthread_cond_timedwait(&_cv_missoes, &_mtx_missoes, &limite) == ETIMEDOUT)
             break;
     }
 
-    bool terminaram = (_missoes_ativas == 0);
+    bool terminaram = _missoes.empty();
 
     pthread_mutex_unlock(&_mtx_missoes);
 

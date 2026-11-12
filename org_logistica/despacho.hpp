@@ -40,14 +40,20 @@ int despacho_slot_do_robo(int robo_id);
 // Cópia do status do robô. Retorna false se ele não está ativo.
 bool despacho_ler_status(int robo_id, DadosStatus& d);
 
+// Cópia do status de todos os robôs ativos, em ordem de slot (para a ponte
+// MQTT publicar a frota). Retorna quantos são.
+int despacho_ler_frota(std::vector<DadosStatus>& ativos);
+
 // Ids de robôs -> máscara de slots (bit i = robô do slot i), o formato que o
 // robô espera em ComandoRobo::equipe. Retorna 0 se algum robô não está ativo
 // (uma equipe válida nunca tem máscara 0).
 uint32_t despacho_mascara_equipe(const std::vector<int>& ids);
 
-// Envia um comando ao robô, com origem ORIGEM_ORGANIZADOR e timestamp atual.
-// Não bloqueia: falha se a fila do robô não existe ou está cheia.
-bool despacho_enviar(int robo_id, const ComandoRobo& cmd);
+// Envia um comando ao robô, com a origem dada e o timestamp atual. Não
+// bloqueia: falha se a fila do robô não existe ou está cheia. Os comandos
+// da Tela de Operação usam ORIGEM_OPERADOR: em modo manual o robô só aceita
+// movimento vindo do operador.
+bool despacho_enviar(int robo_id, const ComandoRobo& cmd, int origem = ORIGEM_ORGANIZADOR);
 
 // CMD_TAREFA: coleta em (cx, cy), entrega em (ex, ey). tarefa_id deve ser > 0.
 bool despacho_tarefa(int robo_id, int tarefa_id, uint32_t equipe, int cx, int cy, int ex, int ey);
@@ -64,8 +70,9 @@ bool despacho_soltar(int robo_id);
 
 // Espera até todos os robôs de ids estarem na tarefa tarefa_id e na fase
 // pedida. Retorna false no timeout, se algum robô deixou de estar ativo, se
-// algum entrou em FASE_FALHOU nesta tarefa ou se despacho_interromper() foi
-// chamado. Bloqueia a thread que chama.
+// algum entrou em FASE_FALHOU nesta tarefa, se algum largou a tarefa (ex.:
+// o operador o passou para manual, o que cancela a tarefa no robô) ou se
+// despacho_interromper() foi chamado. Bloqueia a thread que chama.
 bool despacho_esperar_fase(const std::vector<int>& ids, int tarefa_id, int fase, int timeout_ms);
 
 // Encerramento do Organizador: faz todas as esperas em andamento (e as
