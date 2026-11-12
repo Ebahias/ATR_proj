@@ -23,6 +23,7 @@ typedef struct {
     std::vector<Robo*> assign_robo;
     Baia_carga* b_carga;
     Carga* carga;
+    int tarefa;     // já registrada no manager antes de a thread existir
 
 }Robo_assign_arg_t;
 
@@ -36,6 +37,6 @@ void* Robo_manager_assign_robo_thread(void* arg);
 
 void* Robo_manager_new_robo_thread(void* arg);
 
-void init_Robo_manager_threads(Robo_manager_arg_t* Manager);
+pthread_t init_Robo_manager_threads(Robo_manager_arg_t* Manager);
 
 #endif

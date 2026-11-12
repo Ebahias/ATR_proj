@@ -18,6 +18,8 @@ void Baia_carga_consume_thread(void* arg);
 
 void* Baia_carga_process_thread(void* arg);
 
-void init_baia_carga_threads(Baia_carga* Baia);
+// Cria as threads de chegada e de processamento de cargas da baia. Se
+// "threads" não for nulo, acrescenta os ids nele (o main encerra por eles).
+void init_baia_carga_threads(Baia_carga* Baia, std::vector<pthread_t>* threads = nullptr);
 
 #endif

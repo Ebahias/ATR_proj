@@ -1,4 +1,5 @@
 #include "robo.hpp"
+#include "despacho.hpp"
 #include <stdlib.h>
 #include "comum/log.hpp"
 
@@ -43,7 +44,7 @@ Node* Robo::wait_for_arrival(void) {
 }
 
 // Implementado via IPC
-int Robo::send_path(std::vector<Node*> path) {
+int Robo::send_path(std::vector<Node*>) {
 
     return 0;
 }
@@ -57,57 +58,9 @@ float Robo::get_pos_y(void) {
 }
 
 
+// Liberar a carga: o robô só acopla se estiver em FASE_AGUARDANDO_EQUIPE
 int Robo::lift(void) {
-
-    pid_t pid = fork();
-
-    if(pid < 0) {
-        log_msg("LIFT ROBO", "FORK COM ERRO");
-    }
-    if(pid == 0) {
-
-        std::string id_s = std::to_string(_id);
-
-        execlp("./bin/comando_robo",
-        "comando",
-        id_s.c_str(),
-        "acoplar",
-        (char*)NULL);
-
-        log_msg("lift ROBO", "COMANDO CRIADO");
-
-        _exit(1);
-    }
-
-    log_msg("ROBO", "ROBO %d ACOPLAR", _id);
-    return 0;
-}
-
-int Robo::release(void) {
-
-    pid_t pid = fork();
-
-    if(pid < 0) {
-        log_msg("LIFT ROBO", "FORK COM ERRO");
-    }
-    if(pid == 0) {
-
-        std::string id_s = std::to_string(_id);
-
-        execlp("./bin/comando_robo",
-        "comando",
-        id_s.c_str(),
-        "soltar",
-        (char*)NULL);
-
-        log_msg("lift ROBO", "COMANDO CRIADO");
-
-        _exit(1);
-    }
-
-    log_msg("ROBO", "ROBO %d SOLTAR", _id);
-
-    return 0;
+    return despacho_acoplar(_id) ? 0 : -1;
 }
 int Robo::go_to_pos(Node* i_node, Node* f_node) {
 
@@ -132,41 +85,33 @@ int Robo::go_to_pos(Node* i_node, Node* f_node) {
     return 0;
 }
 
+// Atualiza a cópia local a partir da /atr_frota. O despacho mantém a
+// memória aberta desde o início do processo: abrir e fechar a cada leitura
+// custava um shm_open + mmap + munmap por robô por chamada.
 int Robo::update_status(void) {
 
-    // Acessa memória da frota
-    ShmFrota* shm = shm_frota_abrir();
+    DadosStatus d;
 
-    if(!shm)
+    if(!despacho_ler_status(_id, d)) {
+        _ativo = 0;
         return -1;
-
-    for(int s=0;s<MAX_ROBOS;s++) {
-        DadosStatus d;
-        shm_slot_ler(shm, s, d);
-        
-        if(d.robo_id == _id) {
-
-            _pos_x = d.pos_x;
-            _pos_y = d.pos_y;
-            _modo = d.modo;
-            _ativo = d.ativo;
-            _fase = d.fase;
-            _bateria = d.bateria;
-            _estado = d.estado;
-
-
-        }
     }
 
-    shm_frota_fechar(shm);
+    _pos_x = d.pos_x;
+    _pos_y = d.pos_y;
+    _modo = d.modo;
+    _ativo = d.ativo;
+    _fase = d.fase;
+    _bateria = d.bateria;
+    _estado = d.estado;
 
-    log_msg("ROBO", "ROBO %d -> X: %f Y: %f FASE: %d BATERIA: %d ESTADO: %d",
+    log_msg("ROBO", "ROBO %d -> X: %.0f Y: %.0f FASE: %s BATERIA: %d ESTADO: %s",
             _id,
             _pos_x,
             _pos_y,
-            _fase,
+            fase_tarefa_nome(_fase),
             _bateria,
-            _estado);
+            estado_robo_nome(_estado));
 
     return 0;
 }

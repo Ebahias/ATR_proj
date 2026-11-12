@@ -49,7 +49,17 @@ class Robo {
 
         robo_status_enum _status;
 
-        pid_t _pid;                  
+        pid_t _pid;
+
+        // Reservado para uma missão (ou à espera de começar uma). Escrito e
+        // lido só com o mutex do Robo_manager: é o que impede que a mesma
+        // instância entre em duas equipes ao mesmo tempo.
+        bool _reservado = false;
+
+        // O Gestor avisou que o processo do robô terminou (ROBO_REMOVIDO).
+        // A instância não é apagada porque uma missão ainda pode ter o
+        // ponteiro; só deixa de ser escolhida. Protegido pelo mesmo mutex.
+        bool _removido = false;
 
         Robo(void);
 

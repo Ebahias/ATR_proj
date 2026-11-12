@@ -115,13 +115,20 @@ Node* Baia_descarga::get_free_spot(void) {
     return node;
 }
 
+// Reserva "type" pontos livres da zona, todos ou nenhum. Procurar e travar
+// precisam estar na mesma seção crítica: antes, entre soltar e pegar o mutex
+// de novo, duas missões podiam escolher os mesmos pontos. Também reserva só
+// os "type" pontos pedidos, e não todos os livres da zona.
 std::vector<Node*> Baia_descarga::get_avaiable_spots(int type) {
-    
+
     std::vector<Node*> ret;
 
-    m.lock();
+    std::lock_guard<std::mutex> lock(m);
 
     for(auto v : _node) {
+
+        if((int)ret.size() == type)
+            break;
 
         if(!v->is_locked()) {
 
@@ -130,23 +137,16 @@ std::vector<Node*> Baia_descarga::get_avaiable_spots(int type) {
 
     }
 
-    m.unlock();
-
-    if(ret.size() < type)
+    if((int)ret.size() < type) {
         ret.clear();
-    
-    if(ret.empty())
         return ret;
-
-    m.lock();
+    }
 
     for(auto v : ret) {
 
         v->set_locked();
 
     }
-    
-    m.unlock();
 
     return ret;
 }
