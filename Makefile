@@ -42,7 +42,7 @@ ORGANIZADOR_SRC 	  := org_logistica/org_logistica.cpp org_logistica/robo_manager
 						 org_logistica/grafo_armazem.cpp org_logistica/robo_threads.cpp org_logistica/robo_manager.cpp org_logistica/robo.cpp \
 						 org_logistica/b_carga.cpp org_logistica/b_descarga.cpp org_logistica/z_recarga.cpp \
 						 org_logistica/robo.cpp org_logistica/carga.cpp org_logistica/grafo.cpp	org_logistica/despacho.cpp \
-						 org_logistica/ponte_mqtt.cpp comum/cliente_mqtt.cpp comum/ipc_coletor.cpp \
+						 org_logistica/ponte_mqtt.cpp comum/cliente_mqtt.cpp comum/ipc_coletor.cpp org_logistica/org_logistica_init.cpp\
 						 $(IPC_GESTOR)	$(IPC_ROBO)
 
 PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gestor \

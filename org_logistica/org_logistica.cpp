@@ -41,9 +41,12 @@
 #include "b_carga_threads.hpp"
 #include "despacho.hpp"
 #include "ponte_mqtt.hpp"
-
 #include "comum/log.hpp"
 #include "comum/mapa.hpp"
+#include "org_logistica_init.hpp"
+
+
+
 
 // 4 baias de carga + 4 zonas de entrega, 4 pontos cada
 #define NUM_PONTOS_ARMAZEM  32
@@ -52,6 +55,13 @@
 #define ESPERA_MISSOES_MS   5000
 
 int main(void) {
+
+    // Inicializa o Gestor
+    org_logistica_init_gestor();
+
+    // Inicializa o Mqtt
+    // org_logistica_init_mqtt();
+
 
     // Bloqueado antes de criar qualquer thread (a máscara é herdada): só a
     // thread principal trata SIGINT/SIGTERM, de forma síncrona, com sigwait.
