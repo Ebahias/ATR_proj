@@ -59,6 +59,9 @@ int main(void) {
     // Inicializa o Gestor
     pid_t pid_gestor = org_logistica_init_gestor();
 
+    // Inicializa o Coletor
+    pid_t pid_coletor =  org_logistica_init_coletor();
+
     // Inicializa o Mqtt
     // org_logistica_init_mqtt();
 
@@ -256,7 +259,9 @@ int main(void) {
     log_msg("ORGANIZADOR", "encerrado: %d cargas entregues", manager.entregues());
 
     org_logistica_close_gestor(pid_gestor);
-    
+
+    org_logistica_close_coletor(pid_coletor);
+
     // Deleção do grafo
     for(auto v : grafo) {
         delete v;

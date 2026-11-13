@@ -5,6 +5,7 @@ LDLIBS   += -pthread -lrt
 
 BIN   := bin
 BUILD := build
+DATA := data
 
 # Gestor de Robôs (tarefa 1)
 # Módulos comuns de IPC (memória da frota, passagens estreitas, mapa)
@@ -95,5 +96,8 @@ teste-coletor: all
 
 clean:
 	rm -rf $(BIN) $(BUILD)
+
+clean_data:
+	rm -rf $(DATA)/*
 
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)

@@ -9,7 +9,7 @@
 /**
  * @brief Inicia outro processo para o gestor de robôs.
  * 
- * @return status da operação
+ * @return Pid do processo 
 */
 pid_t org_logistica_init_gestor(void);
 
@@ -33,6 +33,20 @@ int org_logistica_init_mqtt(void);
  * @return status da operação
 */
 int org_logistica_close_mqtt(void);
+
+/**
+ * @brief Inicia outro processo para o coletor de dados.
+ * 
+ * @return Pid do processo
+*/
+pid_t org_logistica_init_coletor(void);
+
+/**
+ * @brief Encerra o processo para o coletor de dados.
+ * 
+ * @return status da operação
+*/
+void org_logistica_close_coletor(pid_t pid_coletor);
 
 
 #endif
