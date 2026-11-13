@@ -62,6 +62,14 @@ float Robo::get_pos_y(void) {
 int Robo::lift(void) {
     return despacho_acoplar(_id) ? 0 : -1;
 }
+
+// Soltar a carga e sair da tarefa (CMD_SOLTAR_CARGA). Não precisa ser
+// chamado ao fim de uma missão: com CMD_TAREFA o robô solta a carga sozinho
+// quando a equipe toda chega à entrega. Serve para abortar uma missão com
+// a carga atracada (como faz abortar_robos) ou para comando direto.
+int Robo::release(void) {
+    return despacho_soltar(_id) ? 0 : -1;
+}
 int Robo::go_to_pos(Node* i_node, Node* f_node) {
 
     Node* anterior_Node = i_node;

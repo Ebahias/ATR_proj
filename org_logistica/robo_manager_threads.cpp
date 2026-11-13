@@ -334,8 +334,34 @@ void* Robo_manager_assign_robo_thread(void* arg) {
 
         bool acoplou = true;
 
-    for(auto r : ass_robo) {
-        r->_status = AVAIABLE;
+        for(auto r : ass_robo) {
+            if(r->lift() < 0)
+                acoplou = false;
+        }
+
+        if(!acoplou) {
+            motivo = "falha ao enviar ACOPLAR";
+            break;
+        }
+
+        if(!despacho_esperar_fase(equipe, tarefa, FASE_CONCLUIDA, TIMEOUT_ENTREGA_MS)) {
+            motivo = "a entrega não foi concluída";
+            break;
+        }
+
+        entregue = true;
+
+    } while(false);
+
+    if(!entregue) {
+        // A espera interrompida pelo encerramento também retorna false:
+        // sem isto o motivo registrado seria o da etapa em que ela estava
+        if(manager->encerrando())
+            motivo = "Organizador encerrando";
+
+        log_msg("ORGANIZADOR", "TAREFA %d ABORTADA (%s): CARGA DE TAMANHO %d DA %s, EQUIPE %s",
+                tarefa, motivo, n, nome_baia, nomes.c_str());
+        abortar_robos(equipe, tarefa, !manager->encerrando());
     }
 
     // Libera os nós da baia de carga e da zona de entrega
