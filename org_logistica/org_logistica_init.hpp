@@ -11,7 +11,14 @@
  * 
  * @return status da operação
 */
-int org_logistica_init_gestor(void);
+pid_t org_logistica_init_gestor(void);
+
+/**
+ * @brief Encerra o processo para o gestor de robôs.
+ * 
+ * @return status da operação
+*/
+void org_logistica_close_gestor(pid_t pid_gestor);
 
 /**
  * @brief Inicia o mqtt para o organizador de logística.
