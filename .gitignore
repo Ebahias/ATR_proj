@@ -3,3 +3,6 @@ build/
 run/
 dados/
 data/
+capturas/
+__pycache__/
+*.pyc

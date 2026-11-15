@@ -52,9 +52,14 @@ PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gest
 
 obj = $(patsubst %.cpp,$(BUILD)/%.o,$(1))
 
-.PHONY: all clean teste teste-gestor teste-robo teste-navegacao teste-status teste-coletor
+.PHONY: all clean teste teste-gestor teste-robo teste-navegacao teste-status teste-coletor \
+        sim teste-simulador teste-simulador-unit
 
-all: $(PROGRAMAS)
+all: $(PROGRAMAS) $(BIN)/mapa.json
+
+# Mapa do galpão exportado para o simulador (Python) desenhar: bin/mapa.json
+$(BIN)/mapa.json: $(BIN)/mapa
+	$(BIN)/mapa json > $@
 
 $(BIN)/gestor_robos: $(call obj,$(GESTOR_SRC))
 $(BIN)/robo: $(call obj,$(ROBO_SRC))
@@ -93,6 +98,17 @@ teste-status: all
 
 teste-coletor: all
 	./testes/teste_coletor.sh
+
+# Simulador + Tela de Operação (Python: pygame + paho-mqtt). Ver simulador/README.md
+sim: all
+	python3 simulador/main.py
+
+teste-simulador-unit:
+	python3 -m unittest simulador.testes.test_simulador -v
+
+# Integração contra o sistema real (precisa de mosquitto e das dependências Python)
+teste-simulador: all
+	./testes/teste_simulador.sh
 
 clean:
 	rm -rf $(BIN) $(BUILD)
