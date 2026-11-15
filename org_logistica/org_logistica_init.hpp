@@ -96,5 +96,12 @@ bool org_logistica_esperar_coletor(pid_t pid_coletor);
 */
 void org_logistica_close_coletor(pid_t pid_coletor);
 
+pid_t org_logistica_init_broker_mqtt(void);
+
+void org_logistica_close_broker_mqtt(pid_t pid_broker);
+
+pid_t org_logistica_init_tela(void);
+
+void org_logistica_close_tela(pid_t pid_tela);
 
 #endif

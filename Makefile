@@ -116,4 +116,7 @@ clean:
 clean_data:
 	rm -rf $(DATA)/*
 
+install_requirements:
+	pip install -r simulador/requirements.txt
+
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
