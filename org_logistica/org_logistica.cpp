@@ -1,12 +1,18 @@
 /*
  * Processo do Organizador da Logística.
  *
- * Uso: org_logistica   (executado da raiz do repositório, por causa de
- *                       coordenadas.txt)
+ * Uso: org_logistica [--fonte fifo|mqtt] [--fifo <caminho>]
+ *                    [--sem-gestor] [--sem-coletor]
  *
- * Pré-requisito: o Gestor de Robôs já rodando (ele cria a /atr_frota e a
- * fila de eventos "/atr_gestor_organizador"). Quem sobe os processos na
- * ordem certa é o script de execução do sistema.
+ *   Executado da raiz do repositório (por causa de coordenadas.txt).
+ *
+ *   O Organizador sobe o Gestor de Robôs e o Coletor de Dados como
+ *   processos filhos (org_logistica_init.cpp) e os encerra no fim:
+ *   --fonte, --fifo    repassados ao gestor_robos (de onde chegam os
+ *                      anúncios de robôs; padrão fifo)
+ *   --sem-gestor       não sobe o Gestor: usa um que já esteja rodando
+ *   --sem-coletor      não sobe o Coletor: usa um que já esteja rodando
+ *                      (ou roda sem ele)
  *
  * Threads:
  *   - principal:     trata SIGINT/SIGTERM (sigwait) e coordena o encerramento
@@ -54,13 +60,58 @@
 // Tempo para as missões em andamento liberarem o que reservaram
 #define ESPERA_MISSOES_MS   5000
 
-int main(void) {
+// Tempo para o Gestor recém-iniciado criar a /atr_frota
+#define ESPERA_GESTOR_MS    5000
+
+static void uso(const char* prog) {
+    fprintf(stderr, "uso: %s [--fonte fifo|mqtt] [--fifo <caminho>] [--sem-gestor] [--sem-coletor]\n", prog);
+}
+
+int main(int argc, char** argv) {
+
+    std::vector<std::string> args_gestor;
+    bool sobe_gestor = true;
+    bool sobe_coletor = true;
+
+    for(int i=1;i<argc;i++) {
+
+        if((strcmp(argv[i], "--fonte") == 0 || strcmp(argv[i], "--fifo") == 0) && i + 1 < argc) {
+            args_gestor.push_back(argv[i]);
+            args_gestor.push_back(argv[++i]);
+        } else if(strcmp(argv[i], "--sem-gestor") == 0) {
+            sobe_gestor = false;
+        } else if(strcmp(argv[i], "--sem-coletor") == 0) {
+            sobe_coletor = false;
+        } else {
+            uso(argv[0]);
+            return 2;
+        }
+    }
+
+    if(!sobe_gestor && !args_gestor.empty()) {
+        log_msg("ORGANIZADOR", "--fonte/--fifo valem só para o Gestor que o Organizador sobe; ignorados com --sem-gestor");
+    }
+
+    // Antes de bloquear os sinais: os filhos herdam a máscara, e o Gestor e
+    // o Coletor precisam receber SIGTERM normalmente
 
     // Inicializa o Gestor
-    pid_t pid_gestor = org_logistica_init_gestor();
+    pid_t pid_gestor = sobe_gestor ? org_logistica_init_gestor(args_gestor) : (pid_t)-1;
 
     // Inicializa o Coletor
-    pid_t pid_coletor =  org_logistica_init_coletor();
+    pid_t pid_coletor = sobe_coletor ? org_logistica_init_coletor() : (pid_t)-1;
+
+    // Em toda saída daqui para a frente: o Gestor primeiro (ele encerra os
+    // robôs), depois o Coletor (que ainda registra esse encerramento)
+    auto encerrar_filhos = [&]() {
+        org_logistica_close_gestor(pid_gestor);
+        org_logistica_close_coletor(pid_coletor);
+    };
+
+    if(sobe_gestor && pid_gestor < 0) {
+        encerrar_filhos();
+        return 1;
+    }
 
     // Inicializa o Mqtt
     // org_logistica_init_mqtt();
@@ -74,8 +125,17 @@ int main(void) {
     sigaddset(&sinais, SIGTERM);
     pthread_sigmask(SIG_BLOCK, &sinais, NULL);
 
-    if(!despacho_iniciar())
+    // O Gestor acabou de ser criado e ainda não teve tempo de criar a
+    // /atr_frota: abrir agora falharia
+    if(sobe_gestor && !org_logistica_esperar_gestor(pid_gestor, ESPERA_GESTOR_MS)) {
+        encerrar_filhos();
         return 1;
+    }
+
+    if(!despacho_iniciar()) {
+        encerrar_filhos();
+        return 1;
+    }
 
     // Criação do Grafo do Armazem
 
@@ -85,6 +145,7 @@ int main(void) {
         log_msg("ORGANIZADOR", "coordenadas.txt com %d pontos (esperado %d); execute da raiz do repositório",
                 (int)grafo.size(), NUM_PONTOS_ARMAZEM);
         despacho_encerrar();
+        encerrar_filhos();
         return 1;
     }
 
@@ -251,6 +312,7 @@ int main(void) {
         // Uma missão ainda usa a /atr_frota e os objetos do main: sai sem
         // destruí-los (exit não chama destrutores de variáveis locais)
         log_msg("ORGANIZADOR", "missões ainda em andamento após %d ms; saindo assim mesmo", ESPERA_MISSOES_MS);
+        encerrar_filhos();
         exit(0);
     }
 
@@ -258,9 +320,7 @@ int main(void) {
 
     log_msg("ORGANIZADOR", "encerrado: %d cargas entregues", manager.entregues());
 
-    org_logistica_close_gestor(pid_gestor);
-
-    org_logistica_close_coletor(pid_coletor);
+    encerrar_filhos();
 
     // Deleção do grafo
     for(auto v : grafo) {
