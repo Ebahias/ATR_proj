@@ -200,6 +200,12 @@ ShmFrota* shm_frota_abrir(void);
 
 void shm_frota_fechar(ShmFrota* shm);
 
+// Remove o nome da memória (shm_unlink). Persistência de kernel: sem isto a
+// próxima execução reaproveitaria a tabela antiga, com robôs que não existem
+// mais. Quem já a mapeou continua usando até o munmap. Usado pelo Gestor, que
+// é o dono, ao sair. Retorna true se havia uma memória para remover.
+bool shm_frota_remover(void);
+
 // Trava um mutex robusto. Se o dono morreu com ele travado (EOWNERDEAD),
 // marca como consistente e segue. Retorna 0 em sucesso, 1 se recuperou o
 // mutex de um processo morto (o chamador pode querer reparar os dados).
@@ -277,6 +283,12 @@ void nome_fila_comando(int robo_id, char* nome, size_t tam);
 int mq_comando_criar(int robo_id);
 
 void mq_comando_remover(int robo_id);
+
+// Remove todas as filas de comando de robôs que sobraram de um Gestor que
+// morreu sem removê-las (kill -9). Só pode ser chamado antes de subir um
+// Gestor novo. Retorna quantas removeu (0 também se /dev/mqueue não está
+// montado e não dá para listá-las).
+int mq_comando_remover_restos(void);
 
 // Robô: abre para leitura não bloqueante (a navegação esvazia a fila a cada ciclo).
 mqd_t mq_comando_abrir_leitura(int robo_id);

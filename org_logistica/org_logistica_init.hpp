@@ -59,6 +59,17 @@ int org_logistica_init_mqtt(void);
 int org_logistica_close_mqtt(void);
 
 /**
+ * @brief Carrega a fila pré-definida de caixas (cargas_iniciais.txt).
+ *
+ * Uma caixa por linha, "<baia> <tamanho>", na ordem do arquivo; linhas com
+ * # são comentário. Linha inválida ou baia cheia: log e segue. Arquivo
+ * ausente: log e segue sem cargas iniciais.
+ *
+ * @return quantas caixas foram acrescentadas
+*/
+int org_logistica_carregar_cargas(const std::string& arquivo, std::vector<Baia_carga*>& baias);
+
+/**
  * @brief Inicia outro processo para o coletor de dados.
  *
  * Os dados vão para data/data_on_<data>_<hora>/, uma pasta por execução.
@@ -66,6 +77,16 @@ int org_logistica_close_mqtt(void);
  * @return Pid do processo, ou -1 em erro
 */
 pid_t org_logistica_init_coletor(void);
+
+/**
+ * @brief Confere que o coletor de dados recém-iniciado continua rodando.
+ *
+ * Pega um exec que falhou (ex.: bin/coletor ausente) ou um Coletor que não
+ * conseguiu abrir a /atr_frota ou a pasta de dados.
+ *
+ * @return false se o coletor terminou logo depois de iniciar
+*/
+bool org_logistica_esperar_coletor(pid_t pid_coletor);
 
 /**
  * @brief Encerra o processo para o coletor de dados.

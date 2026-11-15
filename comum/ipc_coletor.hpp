@@ -58,4 +58,8 @@ int mq_coletor_enviar(mqd_t mq, const RegistroColetor& registro);
 // Bloqueia até receber um registro. Retorna 0 em sucesso, -1 em erro.
 int mq_coletor_receber(mqd_t mq, RegistroColetor& registro);
 
+// Remove o nome da fila (mq_unlink), pelos mesmos motivos de
+// mq_gestor_remover: persistência de kernel. Retorna true se havia uma fila.
+bool mq_coletor_remover(void);
+
 #endif

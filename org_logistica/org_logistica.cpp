@@ -8,8 +8,13 @@
  *
  *   O Organizador sobe o Gestor de Robôs e o Coletor de Dados como
  *   processos filhos (org_logistica_init.cpp) e os encerra no fim:
- *   --fonte, --fifo    repassados ao gestor_robos (de onde chegam os
- *                      anúncios de robôs; padrão fifo)
+ *   --fonte, --fifo    repassados ao gestor_robos: de onde chegam os
+ *                      anúncios de robôs. Padrão mqtt (Etapa 2: o
+ *                      simulador anuncia os robôs pelo broker); fifo para
+ *                      testar sem broker, com bin/novo_robo
+ *
+ *   Ordem: limpa os restos de IPC de uma queda, sobe o Gestor, espera ele
+ *   criar a /atr_frota e só então sobe o Coletor (que também a abre).
  *   --sem-gestor       não sobe o Gestor: usa um que já esteja rodando
  *   --sem-coletor      não sobe o Coletor: usa um que já esteja rodando
  *                      (ou roda sem ele)
@@ -47,6 +52,8 @@
 #include "b_carga_threads.hpp"
 #include "despacho.hpp"
 #include "ponte_mqtt.hpp"
+#include "comum/ipc_coletor.hpp"
+#include "comum/ipc_gestor.hpp"
 #include "comum/log.hpp"
 #include "comum/mapa.hpp"
 #include "org_logistica_init.hpp"
@@ -63,19 +70,26 @@
 // Tempo para o Gestor recém-iniciado criar a /atr_frota
 #define ESPERA_GESTOR_MS    5000
 
+// Fila pré-definida de caixas das baias (enunciado), na raiz do repositório
+#define ARQUIVO_CARGAS      "cargas_iniciais.txt"
+
 static void uso(const char* prog) {
     fprintf(stderr, "uso: %s [--fonte fifo|mqtt] [--fifo <caminho>] [--sem-gestor] [--sem-coletor]\n", prog);
 }
 
 int main(int argc, char** argv) {
 
+    std::string fonte = "mqtt";
     std::vector<std::string> args_gestor;
     bool sobe_gestor = true;
     bool sobe_coletor = true;
 
     for(int i=1;i<argc;i++) {
 
-        if((strcmp(argv[i], "--fonte") == 0 || strcmp(argv[i], "--fifo") == 0) && i + 1 < argc) {
+        if(strcmp(argv[i], "--fonte") == 0 && i + 1 < argc
+           && (strcmp(argv[i + 1], "fifo") == 0 || strcmp(argv[i + 1], "mqtt") == 0)) {
+            fonte = argv[++i];
+        } else if(strcmp(argv[i], "--fifo") == 0 && i + 1 < argc) {
             args_gestor.push_back(argv[i]);
             args_gestor.push_back(argv[++i]);
         } else if(strcmp(argv[i], "--sem-gestor") == 0) {
@@ -88,18 +102,44 @@ int main(int argc, char** argv) {
         }
     }
 
-    if(!sobe_gestor && !args_gestor.empty()) {
+    args_gestor.insert(args_gestor.begin(), fonte);
+    args_gestor.insert(args_gestor.begin(), "--fonte");
+
+    if(!sobe_gestor && args_gestor.size() > 2) {
         log_msg("ORGANIZADOR", "--fonte/--fifo valem só para o Gestor que o Organizador sobe; ignorados com --sem-gestor");
     }
 
-    // Antes de bloquear os sinais: os filhos herdam a máscara, e o Gestor e
-    // o Coletor precisam receber SIGTERM normalmente
+    // Restos de uma execução que terminou com kill -9 ou queda: filas e
+    // memória POSIX têm persistência de kernel, e quem as removeria (o Gestor
+    // e o Coletor, ao sair) não chegou a fazê-lo. Sem esta limpeza, a fila do
+    // Gestor entregaria os ROBO_NOVO da execução anterior. Só remove o que
+    // pertence aos processos que este Organizador vai subir: com --sem-gestor
+    // ou --sem-coletor, os de fora podem estar rodando. A limpeza fica aqui, e
+    // não no início do Gestor ou do Coletor, porque os testes sobem o leitor
+    // antes deles: o Gestor apagaria a fila que o leitor já abriu.
+    if(sobe_gestor) {
+        if(mq_gestor_remover())
+            log_msg("ORGANIZADOR", "removida fila %s de uma execução anterior", MQ_GESTOR_ORGANIZADOR);
+        if(shm_frota_remover())
+            log_msg("ORGANIZADOR", "removida memória %s de uma execução anterior", SHM_FROTA);
+
+        int filas = mq_comando_remover_restos();
+        if(filas > 0)
+            log_msg("ORGANIZADOR", "removidas %d filas de comando de robôs de uma execução anterior", filas);
+    }
+
+    if(sobe_coletor && mq_coletor_remover())
+        log_msg("ORGANIZADOR", "removida fila %s de uma execução anterior", MQ_COLETOR_ORGANIZADOR);
+
+    // Os filhos zeram a máscara de sinais antes do exec (preparar_filho), então
+    // a ordem em relação ao pthread_sigmask abaixo não importa para eles
 
     // Inicializa o Gestor
     pid_t pid_gestor = sobe_gestor ? org_logistica_init_gestor(args_gestor) : (pid_t)-1;
 
-    // Inicializa o Coletor
-    pid_t pid_coletor = sobe_coletor ? org_logistica_init_coletor() : (pid_t)-1;
+    // O Coletor só sobe depois que o Gestor estiver pronto (ele também abre
+    // a /atr_frota)
+    pid_t pid_coletor = (pid_t)-1;
 
     // Em toda saída daqui para a frente: o Gestor primeiro (ele encerra os
     // robôs), depois o Coletor (que ainda registra esse encerramento)
@@ -128,8 +168,20 @@ int main(int argc, char** argv) {
     // O Gestor acabou de ser criado e ainda não teve tempo de criar a
     // /atr_frota: abrir agora falharia
     if(sobe_gestor && !org_logistica_esperar_gestor(pid_gestor, ESPERA_GESTOR_MS)) {
+        if(fonte == "mqtt")
+            log_msg("ORGANIZADOR", "com --fonte mqtt o Gestor precisa do broker (ATR_MQTT_HOST/ATR_MQTT_PORT); "
+                                   "sem broker, use --fonte fifo");
         encerrar_filhos();
         return 1;
+    }
+
+    // Inicializa o Coletor
+    if(sobe_coletor) {
+        pid_coletor = org_logistica_init_coletor();
+        if(pid_coletor < 0 || !org_logistica_esperar_coletor(pid_coletor)) {
+            encerrar_filhos();
+            return 1;
+        }
     }
 
     if(!despacho_iniciar()) {
@@ -250,6 +302,14 @@ int main(int argc, char** argv) {
     std::vector<Zona_recarga*> z_recarga_list;
 
     Robo_manager manager(b_carga_list, b_descarga_list, z_recarga_list);
+
+    // Fila pré-definida de caixas: antes das threads e da ponte, para a
+    // primeira publicação de atr/cargas já mostrar as caixas de cada baia
+    org_logistica_carregar_cargas(ARQUIVO_CARGAS, b_carga_list);
+
+    // Cada baia só separa caixas que a frota consegue atender
+    for(auto b : b_carga_list)
+        b->definir_capacidade_frota([&manager]() { return manager.capacidade_frota(); });
 
     // Antes das threads das baias: as primeiras cargas já saem publicadas.
     // Sem broker a ponte só registra e segue tentando em segundo plano.

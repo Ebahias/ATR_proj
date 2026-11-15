@@ -81,3 +81,14 @@ const char* evento_gestor_nome(int tipo) {
         default:                   return "DESCONHECIDO";
     }
 }
+
+bool mq_gestor_remover(void) {
+
+    if(mq_unlink(MQ_GESTOR_ORGANIZADOR) == 0)
+        return true;
+
+    if(errno != ENOENT)
+        log_msg("IPC", "mq_unlink(%s): %s", MQ_GESTOR_ORGANIZADOR, strerror(errno));
+
+    return false;
+}

@@ -179,9 +179,13 @@ void ColetorDados::encerrar(void) {
 
     estatisticas();
 
+    // A fila tem persistência de kernel: sem mq_unlink, os registros que o
+    // Organizador não leu chegariam na próxima execução. Quem já a abriu
+    // continua lendo o que restou.
     if(_mq != (mqd_t)-1) {
         mq_close(_mq);
         _mq = (mqd_t)-1;
+        mq_coletor_remover();
     }
 
     shm_frota_fechar(_shm);

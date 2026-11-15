@@ -55,10 +55,20 @@ GestorRobos::~GestorRobos() {
 
     encerrar();
 
-    if(_mq != (mqd_t)-1)
+    // Fila e memória têm persistência de kernel: sem remover, os eventos que
+    // ninguém leu e a tabela desta execução apareceriam na próxima. O
+    // mq_unlink só tira o nome; quem está lendo (o Organizador) ainda recebe
+    // o que sobrou, inclusive os ROBO_REMOVIDO do encerramento. A /atr_frota
+    // é do Gestor, e ele só chega aqui depois de todos os robôs terminarem.
+    if(_mq != (mqd_t)-1) {
         mq_close(_mq);
+        mq_gestor_remover();
+    }
 
-    shm_frota_fechar(_shm);
+    if(_shm != NULL) {
+        shm_frota_fechar(_shm);
+        shm_frota_remover();
+    }
 
     pthread_cond_destroy(&_cv_sem_filhos);
     pthread_cond_destroy(&_cv_tem_filhos);

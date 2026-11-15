@@ -84,7 +84,7 @@ Robo* Robo_manager::get_avaiable_robo(float ref_x, float ref_y) {
 // Maior pedido que a frota consegue atender: o tamanho da equipe não pode
 // passar do número de robôs em modo automático. Robôs recarregando, com
 // defeito ou em outra missão contam, porque voltam a ficar disponíveis.
-int Robo_manager::maior_pedido_atendivel(void) {
+int Robo_manager::contar_automaticos(void) {
 
     int capacidade = 0;
 
@@ -95,6 +95,20 @@ int Robo_manager::maior_pedido_atendivel(void) {
         if(!r->_removido && despacho_ler_status(r->get_id(), d) && d.modo == MODO_AUTOMATICO)
             capacidade++;
     }
+
+    return capacidade;
+}
+
+int Robo_manager::capacidade_frota(void) {
+
+    std::lock_guard<std::mutex> lock(m);
+
+    return contar_automaticos();
+}
+
+int Robo_manager::maior_pedido_atendivel(void) {
+
+    int capacidade = contar_automaticos();
 
     int maior = 0;
 
@@ -165,12 +179,12 @@ void Robo_manager::liberar_robo(Robo* robo) {
     robo->_status = AVAIABLE;
 }
 
-void Robo_manager::remover_robo(int robo_id) {
+void Robo_manager::remover_robo(int robo_id, pid_t pid) {
 
     std::lock_guard<std::mutex> lock(m);
 
     for(auto r : _robo) {
-        if(r->get_id() == robo_id)
+        if(r->get_id() == robo_id && r->_pid == pid)
             r->_removido = true;
     }
 }
@@ -298,9 +312,29 @@ bool Robo_manager::encerrando(void) {
     return _encerrando;
 }
 
+// Uma instância por robô vivo. Duas com o mesmo id deixavam a reserva
+// escolher a errada (a de um processo que já morreu), e o robô de verdade
+// ficava esperando a equipe para sempre. Se já existe uma não removida:
+//  - livre: só atualiza o pid e descarta a nova (assume a posse de "robo");
+//  - numa missão: a missão ainda usa o ponteiro, então a antiga é marcada
+//    como removida e a nova entra na lista.
 int Robo_manager::add_robo(Robo* robo) {
 
     std::lock_guard<std::mutex> lock(m);
+
+    for(auto r : _robo) {
+
+        if(r->_removido || r->get_id() != robo->get_id())
+            continue;
+
+        if(!r->_reservado) {
+            r->_pid = robo->_pid;
+            delete robo;
+            return _robo.size();
+        }
+
+        r->_removido = true;
+    }
 
     _robo.push_back(robo);
 

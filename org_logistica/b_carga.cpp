@@ -10,11 +10,10 @@ Baia_carga::Baia_carga(int id, int rows, std::vector<Node*>& node) {
     for(auto v : node) {
         this->_node.push_back(v);
     }
-    
-    std::memset(_node_ocupied, 0, _rows*sizeof(bool));
 
-    // Inicia um semáforo
-    sem_init(&this->bc_sem, 0, rows);
+    // Vagas do buffer limitado (antes iniciado com rows e nunca esperado:
+    // a fila não tinha limite)
+    sem_init(&this->bc_sem, 0, MAX_CARGAS_BAIA);
 
     sem_init(&this->arive_sem, 0, 0);
 
@@ -30,6 +29,11 @@ int Baia_carga::get_id(void) {
 
 int Baia_carga::add_cargo(Carga cargo) {
 
+    // sem_trywait e não sem_wait: com a baia cheia a caixa é recusada na
+    // hora, em vez de travar quem a está acrescentando
+    if(sem_trywait(&this->bc_sem) != 0)
+        return -1;
+
     m.lock();
 
     this->_load.push_back(cargo);
@@ -41,59 +45,75 @@ int Baia_carga::add_cargo(Carga cargo) {
     return 0;
 }
 
-int Baia_carga::get_node_idx(int node_id) {
+void Baia_carga::liberar_vaga(void) {
 
-    int ret = -1;
-
-    for(int i=0;i<_rows;i++) {
-        if(node_id == _node[i]->get_id())
-            ret = i;
-    }
-
-    return ret;
+    sem_post(&this->bc_sem);
 }
 
-Carga Baia_carga::consume_cargo(void) {
+void Baia_carga::devolver_cargo(Carga cargo) {
 
+    m.lock();
 
-    for(int i=0;i<_cargo.front().get_type();i++) {
-        
-        int idx = this->get_node_idx(_cargo.front()._node_id[i]);
-        
-        if(idx >= 0)
-            this->_node_ocupied[idx] = false;
-        
-        sem_post(&this->bc_sem);
-    }
+    this->_load.push_back(cargo);
 
-    Carga cargo_ret = _cargo.front();
+    m.unlock();
 
-    _cargo.pop_front();
+    sem_post(&this->arive_sem);
+}
 
-    return cargo_ret;
+void Baia_carga::definir_capacidade_frota(std::function<int(void)> capacidade) {
+
+    _capacidade_frota = capacidade;
 }
 
 int Baia_carga::pub_cargo(void) {
 
     sem_wait(&this->arive_sem);
 
-    // A thread de chegada de cargas faz push em _load ao mesmo tempo: a
-    // consulta precisa do mutex tanto quanto o front().
-    m.lock();
-
-    if(_load.empty()) {
-        m.unlock();
-        return -1;
-    }
-
-    // Prioridade para a maior carga; entre as de mesmo tamanho, a mais
-    // antiga. As grandes precisam de mais robôs livres ao mesmo tempo e, por
-    // ordem de chegada, ficavam esperando atrás das pequenas.
+    // Com nenhuma caixa que a frota atenda, espera a frota crescer (ou
+    // chegar uma caixa menor), revendo a cada intervalo
+    struct timespec espera = { 0, 500 * 1000000L };
+    bool avisou = false;
     size_t escolhida = 0;
 
-    for(size_t i=1;i<_load.size();i++) {
-        if(_load[i].get_type() > _load[escolhida].get_type())
-            escolhida = i;
+    while(true) {
+
+        // Fora do mutex da baia: consulta o manager, que tem o seu mutex
+        int limite = _capacidade_frota ? _capacidade_frota() : 4;
+
+        // add_cargo e devolver_cargo fazem push em _load ao mesmo tempo, de
+        // outras threads: a consulta precisa do mutex tanto quanto o front().
+        m.lock();
+
+        if(_load.empty()) {
+            m.unlock();
+            return -1;
+        }
+
+        // Prioridade para a maior carga que a frota atende; entre as de
+        // mesmo tamanho, a mais antiga. As grandes precisam de mais robôs
+        // livres ao mesmo tempo e, por ordem de chegada, ficavam esperando
+        // atrás das pequenas.
+        bool achou = false;
+
+        for(size_t i=0;i<_load.size();i++) {
+            if(_load[i].get_type() <= limite && (!achou || _load[i].get_type() > _load[escolhida].get_type())) {
+                escolhida = i;
+                achou = true;
+            }
+        }
+
+        if(achou)
+            break;
+
+        m.unlock();
+
+        if(!avisou) {
+            log_msg("B CARGA", "BAIA %d: NENHUMA CAIXA CABE NA FROTA ATUAL (%d ROBÔS EM AUTOMÁTICO); AGUARDANDO ROBÔS", _id, limite);
+            avisou = true;
+        }
+
+        nanosleep(&espera, NULL);
     }
 
         Carga cargo = _load[escolhida];
@@ -102,8 +122,8 @@ int Baia_carga::pub_cargo(void) {
 
     std::vector<Node*> av_node = this->get_avaiable_nodes(cargo.get_type());
 
-    // Só esta thread remove de _load e a de chegada só acrescenta no fim:
-    // o índice escolhido continua apontando para a mesma carga
+    // Só esta thread remove de _load; add_cargo e devolver_cargo só
+    // acrescentam no fim: o índice escolhido continua na mesma carga
     m.lock();
 
     _load.erase(_load.begin() + escolhida);
@@ -164,6 +184,8 @@ void Baia_carga::listar_pendentes(std::vector<int>& tamanhos) {
 
 std::vector<Node*> Baia_carga::get_avaiable_nodes(int type) {
 
+    // A espera pelos pontos fica fora do mutex: bloquear segurando-o travaria
+    // add_cargo e listar_pendentes
     for(int i=0;i<type;i++) 
         sem_wait(&this->avaiable_sem);
 
@@ -171,6 +193,10 @@ std::vector<Node*> Baia_carga::get_avaiable_nodes(int type) {
     int qtd_node = 0;
 
     std::vector<Node*> ret;
+
+    // Procura e reserva na mesma seção crítica: o par is_locked + set_locked
+    // não é atômico, e duas reservas intercaladas pegariam o mesmo ponto
+    std::lock_guard<std::mutex> lock(m);
 
     for(auto v : _node) {
 

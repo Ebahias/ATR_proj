@@ -4,6 +4,8 @@
 #include "comum/log.hpp"
 #include "comum/mapa.hpp"
 
+#include <cerrno>
+#include <csignal>
 #include <string>
 #include <time.h>
 
@@ -130,10 +132,22 @@ void* organizador_de_logistica_thread(void* arg) {
         // das outras baias cederem a vez a esta, se ela for maior.
         manager->registrar_pedido(b_carga->get_id(), n);
 
+        bool devolvida = false;
+
         while(!manager->reservar_equipe(n, ref_x, ref_y, assign_arg->assign_robo)) {
 
             if(manager->encerrando())
                 break;
+
+            // A frota diminuiu depois que a caixa foi separada (robô morreu
+            // ou foi para manual): sem robôs para ela, a caixa volta para a
+            // fila ainda com a vaga, e a baia segue com as que cabem
+            if(n > manager->capacidade_frota()) {
+                log_msg("ORGANIZADOR", "BAIA %d: CARGA DE TAMANHO %d MAIOR QUE A FROTA (%d EM AUTOMÁTICO), VOLTA PARA A FILA",
+                        b_carga->get_id(), n, manager->capacidade_frota());
+                devolvida = true;
+                break;
+            }
 
             if(!avisou) {
                 log_msg("ORGANIZADOR", "BAIA %d: AGUARDANDO %d ROBÔS DISPONÍVEIS (FROTA COM %d)",
@@ -146,8 +160,19 @@ void* organizador_de_logistica_thread(void* arg) {
 
         manager->retirar_pedido(b_carga->get_id(), n);
 
-        if(assign_arg->assign_robo.empty()) {
+        if(devolvida) {
             b_carga->free_ocupied_nodes(p_carga->_node);
+            b_carga->devolver_cargo(Carga(n));
+            ponte_mqtt_cargas_mudaram();
+            delete p_carga;
+            delete assign_arg;
+            continue;
+        }
+
+        if(assign_arg->assign_robo.empty()) {
+            // Encerramento: a caixa é descartada e devolve a vaga do buffer
+            b_carga->free_ocupied_nodes(p_carga->_node);
+            b_carga->liberar_vaga();
             delete p_carga;
             delete assign_arg;
             break;
@@ -185,7 +210,7 @@ void* organizador_de_logistica_thread(void* arg) {
                 manager->liberar_robo(r);
 
             b_carga->free_ocupied_nodes(p_carga->_node);
-            b_carga->add_cargo(Carga(n));
+            b_carga->devolver_cargo(Carga(n));
             manager->missao_terminou(assign_arg->tarefa, false);
             ponte_mqtt_cargas_mudaram();
             delete p_carga;
@@ -376,8 +401,15 @@ void* Robo_manager_assign_robo_thread(void* arg) {
     if(entregue) {
         log_msg("ORGANIZADOR", "TAREFA %d CONCLUÍDA: CARGA DE TAMANHO %d, %s -> %s, EQUIPE %s, %.1f s",
                 tarefa, n, nome_baia, nome_area(AREA_ZONA, zona), nomes.c_str(), agora_s() - inicio);
-    } else if(!manager->encerrando()) {
-        baia->add_cargo(Carga(n));
+    }
+
+    // A vaga do buffer é da caixa até a missão terminar: entregue ou
+    // descartada no encerramento, a vaga volta; falhou, a caixa volta para a
+    // fila ainda com a vaga (devolver_cargo não passa pelo limite)
+    if(entregue || manager->encerrando()) {
+        baia->liberar_vaga();
+    } else {
+        baia->devolver_cargo(Carga(n));
         log_msg("ORGANIZADOR", "TAREFA %d: CARGA DE TAMANHO %d DEVOLVIDA À FILA DA %s", tarefa, n, nome_baia);
     }
 
@@ -416,6 +448,19 @@ void* Robo_manager_new_robo_thread(void* arg) {
                     (long)ev.timestamp.tv_sec, ev.timestamp.tv_nsec);
 
 
+            // A fila pode trazer eventos de uma execução anterior (ela tem
+            // persistência de kernel). Só vale o anúncio cujo robô está ativo
+            // na /atr_frota agora, com o mesmo pid, e cujo processo existe:
+            // um Gestor que reabre uma /atr_frota antiga não zera a tabela, e
+            // então evento e tabela antigos concordam entre si.
+            DadosStatus d;
+
+            if(!despacho_ler_status(ev.robo_id, d) || d.pid != ev.pid
+               || (kill(ev.pid, 0) < 0 && errno == ESRCH)) {
+                log_msg("NOVOS ROBOS", "ROBO_NOVO antigo ignorado: robô %d pid %d não está ativo", ev.robo_id, ev.pid);
+                continue;
+            }
+
             Robo* robo_novo = new Robo(ev.robo_id, ev.pos_x, ev.pos_y, ev.pid);
 
             manager->add_robo(robo_novo);
@@ -433,7 +478,7 @@ void* Robo_manager_new_robo_thread(void* arg) {
             // Robô morto não pode ser escolhido de novo; uma missão que o
             // tinha na equipe percebe sozinha pela /atr_frota
             if(ev.tipo == EVENTO_ROBO_REMOVIDO) {
-                manager->remover_robo(ev.robo_id);
+                manager->remover_robo(ev.robo_id, ev.pid);
                 log_msg("NOVOS ROBOS", "ROBO %d REMOVIDO DA FROTA", ev.robo_id);
             }
         }

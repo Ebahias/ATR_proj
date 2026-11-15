@@ -5,6 +5,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -216,6 +217,17 @@ void shm_frota_fechar(ShmFrota* shm) {
         munmap(shm, sizeof(ShmFrota));
 }
 
+bool shm_frota_remover(void) {
+
+    if(shm_unlink(SHM_FROTA) == 0)
+        return true;
+
+    if(errno != ENOENT)
+        log_msg("IPC", "shm_unlink(%s): %s", SHM_FROTA, strerror(errno));
+
+    return false;
+}
+
 int shm_lock(pthread_mutex_t* mtx) {
 
     int ret = pthread_mutex_lock(mtx);
@@ -420,6 +432,39 @@ void mq_comando_remover(int robo_id) {
     nome_fila_comando(robo_id, nome, sizeof(nome));
 
     mq_unlink(nome);
+}
+
+int mq_comando_remover_restos(void) {
+
+    // Os nomes dependem do id, então é preciso listar. No Linux as filas
+    // aparecem em /dev/mqueue; sem ele montado não há como achá-las.
+    DIR* dir = opendir("/dev/mqueue");
+
+    if(dir == NULL)
+        return 0;
+
+    int removidas = 0;
+    struct dirent* e;
+
+    while((e = readdir(dir)) != NULL) {
+
+        int id;
+        char resto[8];
+
+        // "%7s" pega o que sobra depois do número: tem de ser exatamente "_cmd"
+        if(sscanf(e->d_name, "atr_robo_%d%7s", &id, resto) != 2 || strcmp(resto, "_cmd") != 0)
+            continue;
+
+        char nome[64];
+        nome_fila_comando(id, nome, sizeof(nome));
+
+        if(mq_unlink(nome) == 0)
+            removidas++;
+    }
+
+    closedir(dir);
+
+    return removidas;
 }
 
 mqd_t mq_comando_abrir_leitura(int robo_id) {

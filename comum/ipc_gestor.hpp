@@ -47,6 +47,12 @@ int mq_gestor_enviar(mqd_t mq, const EventoGestor& evento, int timeout_ms);
 // Bloqueia até receber um evento. Retorna 0 em sucesso, -1 em erro.
 int mq_gestor_receber(mqd_t mq, EventoGestor& evento);
 
+// Remove o nome da fila (mq_unlink). A fila tem persistência de kernel: sem
+// isto, os eventos que sobraram de uma execução chegariam na seguinte. Quem
+// já está com ela aberta continua lendo o que resta. Retorna true se havia
+// uma fila para remover.
+bool mq_gestor_remover(void);
+
 const char* evento_gestor_nome(int tipo);
 
 #endif

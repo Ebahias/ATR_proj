@@ -427,7 +427,12 @@ static void executar(const ComandoOperacao& c) {
                         c.texto, (int)g_manager->_b_carga.size());
                 return;
             }
-            g_manager->_b_carga[c.a - 1]->add_cargo(Carga(c.b));
+            // A baia tem capacidade limitada (MAX_CARGAS_BAIA): cheia, a
+            // caixa é recusada na hora, sem travar esta thread
+            if(g_manager->_b_carga[c.a - 1]->add_cargo(Carga(c.b)) < 0) {
+                log_msg("PONTE", "comando \"%s\" recusado: baia %d cheia (%d caixas)", c.texto, c.a, MAX_CARGAS_BAIA);
+                return;
+            }
             ponte_mqtt_cargas_mudaram();
             log_msg("PONTE", "operação: carga de tamanho %d acrescentada à Baia %d", c.b, c.a);
             return;

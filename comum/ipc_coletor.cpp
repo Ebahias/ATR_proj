@@ -61,3 +61,14 @@ int mq_coletor_receber(mqd_t mq, RegistroColetor& registro) {
 
     return (n == (ssize_t)sizeof(registro)) ? 0 : -1;
 }
+
+bool mq_coletor_remover(void) {
+
+    if(mq_unlink(MQ_COLETOR_ORGANIZADOR) == 0)
+        return true;
+
+    if(errno != ENOENT)
+        log_msg("IPC", "mq_unlink(%s): %s", MQ_COLETOR_ORGANIZADOR, strerror(errno));
+
+    return false;
+}

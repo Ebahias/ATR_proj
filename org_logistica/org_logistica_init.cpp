@@ -26,13 +26,18 @@
 
 #define DATA_PATH "data/"
 
-// Tempo que o Gestor e o Coletor têm para terminar depois do SIGTERM. O
-// Gestor encerra os robôs e espera por eles antes de sair.
-#define ESPERA_FILHO_MS         5000
+// Prazo para cada filho terminar depois do SIGTERM. O Gestor encerra os
+// robôs e espera por eles antes de sair, por isso tem mais tempo.
+#define ESPERA_FIM_GESTOR_MS    10000
+#define ESPERA_FIM_COLETOR_MS   5000
 
-// Depois que a /atr_frota aparece, o Gestor ainda pode falhar logo em
-// seguida (ex.: --fonte mqtt sem broker): observa o filho mais um pouco
-#define ESTABILIZACAO_GESTOR_MS 500
+// Intervalo entre as verificações (sem espera ocupada)
+#define INTERVALO_VERIFICA_MS   100
+
+// Depois de pronto, o filho ainda pode falhar logo em seguida (ex.: Gestor
+// com --fonte mqtt sem broker, exec do Coletor que falhou): observa mais um
+// pouco antes de seguir
+#define ESTABILIZACAO_MS        500
 
 /**
  * @brief Função simples, só pra gerar um timestamp para salvar os dados
@@ -85,6 +90,12 @@ static void preparar_filho(pid_t pai) {
 
     setpgid(0, 0);
 
+    // A máscara de sinais é herdada pelo exec: se o Organizador já estiver
+    // com SIGINT/SIGTERM bloqueados, o filho também ficaria
+    sigset_t vazio;
+    sigemptyset(&vazio);
+    sigprocmask(SIG_SETMASK, &vazio, NULL);
+
     prctl(PR_SET_PDEATHSIG, SIGTERM);
 
     // O pai pode ter morrido antes do prctl
@@ -93,26 +104,45 @@ static void preparar_filho(pid_t pai) {
 }
 #endif
 
-// Espera o filho terminar; se passar do tempo, mata com SIGKILL
-static void esperar_filho(pid_t pid, const char* nome) {
+static void registrar_saida(const char* nome, pid_t pid, int status) {
 
-    struct timespec intervalo = { 0, 50 * 1000000L };
+    if(WIFEXITED(status))
+        log_msg("ORGANIZADOR", "%s (pid %d) terminou com código %d", nome, pid, WEXITSTATUS(status));
+    else if(WIFSIGNALED(status))
+        log_msg("ORGANIZADOR", "%s (pid %d) terminou por sinal %d (%s)", nome, pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
+}
 
-    for(int ms=0;ms<ESPERA_FILHO_MS;ms+=50) {
+// Manda SIGTERM e espera o filho com waitpid (sem isso ele viraria zumbi e o
+// Organizador sairia antes de ele terminar). Esgotado o prazo, SIGKILL.
+static void encerrar_filho(pid_t pid, const char* nome, int prazo_ms) {
+
+    kill(pid, SIGTERM);
+
+    struct timespec intervalo = { 0, INTERVALO_VERIFICA_MS * 1000000L };
+
+    for(int ms=0;ms<prazo_ms;ms+=INTERVALO_VERIFICA_MS) {
 
         int status;
         pid_t r = waitpid(pid, &status, WNOHANG);
 
-        if(r == pid || (r < 0 && errno == ECHILD))
+        if(r == pid) {
+            registrar_saida(nome, pid, status);
+            return;
+        }
+
+        if(r < 0 && errno == ECHILD)
             return;
 
         nanosleep(&intervalo, NULL);
     }
 
-    log_msg("ORGANIZADOR", "%s (pid %d) não terminou em %d ms; enviando SIGKILL", nome, pid, ESPERA_FILHO_MS);
+    log_msg("ORGANIZADOR", "%s (pid %d) não terminou em %d ms; enviando SIGKILL", nome, pid, prazo_ms);
 
     kill(pid, SIGKILL);
-    waitpid(pid, NULL, 0);
+
+    int status;
+    if(waitpid(pid, &status, 0) == pid)
+        registrar_saida(nome, pid, status);
 }
 
 // Pronta quando existe e já tem o tamanho final. Só existir não basta: entre
@@ -133,7 +163,7 @@ static bool frota_pronta(void) {
     return pronta;
 }
 
-#ifndef GESTOR_NOVO_TERMINAL
+#if !defined(GESTOR_NOVO_TERMINAL) || !defined(COLETOR_NOVO_TERMINAL)
 // true se o filho já terminou (e registra como)
 static bool filho_terminou(pid_t pid, const char* nome) {
 
@@ -142,12 +172,24 @@ static bool filho_terminou(pid_t pid, const char* nome) {
     if(waitpid(pid, &status, WNOHANG) != pid)
         return false;
 
-    if(WIFEXITED(status))
-        log_msg("ORGANIZADOR", "%s terminou com código %d antes de ficar pronto", nome, WEXITSTATUS(status));
-    else
-        log_msg("ORGANIZADOR", "%s terminou por sinal %d antes de ficar pronto", nome, WTERMSIG(status));
+    log_msg("ORGANIZADOR", "%s terminou antes de ficar pronto", nome);
+    registrar_saida(nome, pid, status);
 
     return true;
+}
+
+// Observa o filho por ms milissegundos; false se ele terminar nesse tempo
+static bool continua_vivo(pid_t pid, const char* nome, int ms) {
+
+    struct timespec intervalo = { 0, INTERVALO_VERIFICA_MS * 1000000L };
+
+    for(int t=0;t<ms;t+=INTERVALO_VERIFICA_MS) {
+        if(filho_terminou(pid, nome))
+            return false;
+        nanosleep(&intervalo, NULL);
+    }
+
+    return !filho_terminou(pid, nome);
 }
 #endif
 
@@ -211,7 +253,9 @@ pid_t org_logistica_init_gestor(const std::vector<std::string>& args) {
 
         execv(exe.c_str(), argv.data());
 
-        log_msg("ORGANIZADOR", "exec %s: %s", exe.c_str(), strerror(errno));
+        // Só chega aqui se o exec falhou. Sem o _exit, o filho continuaria
+        // rodando uma segunda cópia do Organizador.
+        perror(exe.c_str());
         _exit(127);
     }
 
@@ -224,7 +268,7 @@ pid_t org_logistica_init_gestor(const std::vector<std::string>& args) {
 
 bool org_logistica_esperar_gestor(pid_t pid_gestor, int timeout_ms) {
 
-    struct timespec intervalo = { 0, 50 * 1000000L };
+    struct timespec intervalo = { 0, INTERVALO_VERIFICA_MS * 1000000L };
 
     int ms = 0;
 
@@ -241,15 +285,26 @@ bool org_logistica_esperar_gestor(pid_t pid_gestor, int timeout_ms) {
         }
 
         nanosleep(&intervalo, NULL);
-        ms += 50;
+        ms += INTERVALO_VERIFICA_MS;
     }
 
     #ifndef GESTOR_NOVO_TERMINAL
-    for(int t=0;t<ESTABILIZACAO_GESTOR_MS && pid_gestor > 0;t+=50) {
-        if(filho_terminou(pid_gestor, "Gestor de Robôs"))
-            return false;
-        nanosleep(&intervalo, NULL);
-    }
+    if(pid_gestor > 0 && !continua_vivo(pid_gestor, "Gestor de Robôs", ESTABILIZACAO_MS))
+        return false;
+    #endif
+
+    log_msg("ORGANIZADOR", "Gestor de Robôs pronto (%s criada em %d ms)", SHM_FROTA, ms);
+
+    return true;
+}
+
+bool org_logistica_esperar_coletor(pid_t pid_coletor) {
+
+    #ifndef COLETOR_NOVO_TERMINAL
+    if(pid_coletor > 0 && !continua_vivo(pid_coletor, "Coletor de Dados", ESTABILIZACAO_MS))
+        return false;
+    #else
+    (void)pid_coletor;
     #endif
 
     return true;
@@ -281,12 +336,64 @@ void org_logistica_close_gestor(pid_t pid_gestor) {
     if(pid_gestor <= 0)
         return;
 
-    kill(pid_gestor, SIGTERM);
-
-    esperar_filho(pid_gestor, "Gestor de Robôs");
+    encerrar_filho(pid_gestor, "Gestor de Robôs", ESPERA_FIM_GESTOR_MS);
 
     #endif
 
+}
+
+int org_logistica_carregar_cargas(const std::string& arquivo, std::vector<Baia_carga*>& baias) {
+
+    FILE* f = fopen(arquivo.c_str(), "r");
+
+    if(f == NULL) {
+        log_msg("ORGANIZADOR", "%s: %s; sem cargas iniciais (caixas novas só pelo comando CAIXA)",
+                arquivo.c_str(), strerror(errno));
+        return 0;
+    }
+
+    char linha[256];
+    int n_linha = 0;
+    int carregadas = 0;
+
+    while(fgets(linha, sizeof(linha), f) != NULL) {
+
+        n_linha++;
+
+        // Tira o fim de linha (\n ou \r\n, se o arquivo foi editado no Windows)
+        linha[strcspn(linha, "\r\n")] = '\0';
+
+        const char* p = linha + strspn(linha, " \t");
+
+        if(*p == '\0' || *p == '#')
+            continue;
+
+        int baia, tamanho;
+        char sobra;
+
+        if(sscanf(p, "%d %d %c", &baia, &tamanho, &sobra) != 2
+           || baia < 1 || baia > (int)baias.size() || tamanho < 1 || tamanho > 4) {
+            log_msg("ORGANIZADOR", "%s, linha %d inválida ignorada: \"%s\" (esperado <baia 1-%d> <tamanho 1-4>)",
+                    arquivo.c_str(), n_linha, linha, (int)baias.size());
+            continue;
+        }
+
+        // Mesmo limite das caixas do comando CAIXA: o arquivo também não
+        // pode passar da capacidade da baia
+        if(baias[baia - 1]->add_cargo(Carga(tamanho)) < 0) {
+            log_msg("ORGANIZADOR", "%s, linha %d: baia %d cheia (%d caixas), caixa de tamanho %d recusada",
+                    arquivo.c_str(), n_linha, baia, MAX_CARGAS_BAIA, tamanho);
+            continue;
+        }
+
+        carregadas++;
+    }
+
+    fclose(f);
+
+    log_msg("ORGANIZADOR", "%d caixas carregadas de %s", carregadas, arquivo.c_str());
+
+    return carregadas;
 }
 
 pid_t org_logistica_init_coletor(void) {
@@ -364,7 +471,7 @@ pid_t org_logistica_init_coletor(void) {
                 (char*)NULL
         );
 
-        log_msg("ORGANIZADOR", "exec %s: %s", exe.c_str(), strerror(errno));
+        perror(exe.c_str());
         _exit(127);
     }
 
@@ -401,9 +508,7 @@ void org_logistica_close_coletor(pid_t pid_coletor) {
     if(pid_coletor <= 0)
         return;
 
-    kill(pid_coletor, SIGTERM);
-
-    esperar_filho(pid_coletor, "Coletor de Dados");
+    encerrar_filho(pid_coletor, "Coletor de Dados", ESPERA_FIM_COLETOR_MS);
 
     #endif
 

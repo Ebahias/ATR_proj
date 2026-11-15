@@ -1,0 +1,27 @@
+# Fila pré-definida de caixas das baias de carga (enunciado: "Cada baia deve
+# ter um número fixo de caixas, de diferentes tamanhos (1, 2, 3 ou 4) no
+# início do programa. O organizador deve escolher as caixas a partir de uma
+# fila pré-definida, não ordenada, para disponibilização em cada baia.")
+#
+# Uma caixa por linha: <baia 1-4> <tamanho 1-4>. A ordem do arquivo é a ordem
+# da fila, de propósito misturada (nem por baia nem por tamanho). Lido pelo
+# Organizador na inicialização; caixas novas entram pelo comando CAIXA em
+# atr/operacao/cmd. Cada baia guarda no máximo MAX_CARGAS_BAIA (8) caixas.
+#
+# baia tamanho
+2 3
+1 1
+4 4
+3 2
+1 4
+2 1
+3 3
+4 2
+2 2
+4 1
+1 3
+3 4
+4 3
+1 2
+3 1
+2 4

@@ -82,6 +82,8 @@ class Robo_manager {
 
         int maior_pedido_atendivel(void);
 
+        int contar_automaticos(void);
+
     public:
 
         std::vector<Baia_carga*> _b_carga;
@@ -109,11 +111,18 @@ class Robo_manager {
 
         void liberar_robo(Robo* robo);
 
-        // ROBO_REMOVIDO do Gestor: o robô deixa de ser escolhido.
-        void remover_robo(int robo_id);
+        // ROBO_REMOVIDO do Gestor: o robô deixa de ser escolhido. Confere
+        // também o pid, para um evento velho não tirar da frota um robô
+        // vivo de mesmo id.
+        void remover_robo(int robo_id, pid_t pid);
 
         // Robôs que o Gestor anunciou e ainda não removeu.
         int num_robos_ativos(void);
+
+        // Maior equipe que a frota consegue formar: robôs em modo automático
+        // (os ocupados, recarregando ou com defeito contam, porque voltam).
+        // Uma carga maior que isto nunca seria atendida.
+        int capacidade_frota(void);
 
         void missao_iniciou(const MissaoInfo& missao);
 
