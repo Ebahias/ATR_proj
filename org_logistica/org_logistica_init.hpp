@@ -96,12 +96,35 @@ bool org_logistica_esperar_coletor(pid_t pid_coletor);
 */
 void org_logistica_close_coletor(pid_t pid_coletor);
 
+/**
+ * @brief Sobe o broker MQTT (mosquitto) em ATR_MQTT_HOST/ATR_MQTT_PORT, se
+ * nenhum estiver respondendo lá, e espera ele aceitar conexões.
+ *
+ * @return pid do broker iniciado; 0 se já havia um rodando (não é deste
+ * Organizador e não será encerrado por ele); -1 em erro
+*/
 pid_t org_logistica_init_broker_mqtt(void);
 
+/**
+ * @brief Encerra o broker que este Organizador subiu (nada com pid <= 0).
+ * Chamar por último: o Gestor e os robôs ainda o usam ao encerrar.
+*/
 void org_logistica_close_broker_mqtt(pid_t pid_broker);
 
+/**
+ * @brief Sobe a Tela de Operação e simulador (python3 simulador/main.py).
+ *
+ * Sem DISPLAY/WAYLAND_DISPLAY, roda com --sem-janela (física e MQTT). Confere
+ * que o processo continua vivo por alguns instantes (pygame ausente, janela
+ * que não abre).
+ *
+ * @return pid da Tela, ou -1 em erro
+*/
 pid_t org_logistica_init_tela(void);
 
+/**
+ * @brief Encerra a Tela de Operação (nada com pid <= 0).
+*/
 void org_logistica_close_tela(pid_t pid_tela);
 
 #endif

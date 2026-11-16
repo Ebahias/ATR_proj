@@ -1,12 +1,17 @@
 #include "org_logistica_init.hpp"
 #include "comum/ipc_robo.hpp"
 #include "comum/log.hpp"
+#include "comum/mqtt_topicos.hpp"
 
 #include <cerrno>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <fstream>
+#include <netdb.h>
+#include <poll.h>
+#include <sys/socket.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
@@ -33,6 +38,13 @@
 
 // Intervalo entre as verificações (sem espera ocupada)
 #define INTERVALO_VERIFICA_MS   100
+
+// Tempo para o broker recém-iniciado aceitar conexões
+#define ESPERA_BROKER_MS        3000
+
+// A Tela (Python) leva um pouco para importar o pygame e abrir a janela:
+// observa por mais tempo que os programas em C++
+#define ESPERA_TELA_MS          2000
 
 // Depois de pronto, o filho ainda pode falhar logo em seguida (ex.: Gestor
 // com --fonte mqtt sem broker, exec do Coletor que falhou): observa mais um
@@ -78,7 +90,6 @@ static std::string pasta_do_executavel(void) {
     return s.substr(0, s.find_last_of('/'));
 }
 
-#if !defined(GESTOR_NOVO_TERMINAL) || !defined(COLETOR_NOVO_TERMINAL)
 // No filho, antes do exec:
 //  - grupo de processos próprio: o Ctrl+C do terminal chega só ao
 //    Organizador, que encerra o Gestor e o Coletor na ordem certa. Antes,
@@ -102,7 +113,6 @@ static void preparar_filho(pid_t pai) {
     if(getppid() != pai)
         _exit(1);
 }
-#endif
 
 static void registrar_saida(const char* nome, pid_t pid, int status) {
 
@@ -163,7 +173,6 @@ static bool frota_pronta(void) {
     return pronta;
 }
 
-#if !defined(GESTOR_NOVO_TERMINAL) || !defined(COLETOR_NOVO_TERMINAL)
 // true se o filho já terminou (e registra como)
 static bool filho_terminou(pid_t pid, const char* nome) {
 
@@ -191,7 +200,6 @@ static bool continua_vivo(pid_t pid, const char* nome, int ms) {
 
     return !filho_terminou(pid, nome);
 }
-#endif
 
 
 pid_t org_logistica_init_gestor(const std::vector<std::string>& args) {
@@ -514,9 +522,94 @@ void org_logistica_close_coletor(pid_t pid_coletor) {
 
 }
 
+/*
+ * Broker MQTT e Tela de Operação (simulador em Python), lançados do mesmo
+ * jeito que o Gestor e o Coletor: preparar_filho (grupo próprio, SIGTERM se
+ * o Organizador morrer), execvp com os argumentos separados, perror +
+ * _exit(127) se o exec falhar, e nada de waitpid bloqueante logo depois (o
+ * mosquitto e o simulador rodam até serem encerrados).
+ */
+
+// Mesma configuração que o ClienteMqtt usa
+static void endereco_broker(std::string& host, int& porta) {
+
+    const char* h = getenv(MQTT_ENV_HOST);
+    const char* p = getenv(MQTT_ENV_PORTA);
+
+    host = (h != NULL && h[0] != '\0') ? h : MQTT_HOST_PADRAO;
+    porta = (p != NULL && atoi(p) > 0) ? atoi(p) : MQTT_PORTA_PADRAO;
+}
+
+// true se algo aceita conexão TCP em host:porta (connect com timeout curto:
+// um host remoto que não responde não pode travar a inicialização)
+static bool broker_responde(const std::string& host, int porta) {
+
+    char porta_s[16];
+    snprintf(porta_s, sizeof(porta_s), "%d", porta);
+
+    struct addrinfo dicas;
+    memset(&dicas, 0, sizeof(dicas));
+    dicas.ai_family = AF_UNSPEC;
+    dicas.ai_socktype = SOCK_STREAM;
+
+    struct addrinfo* lista = NULL;
+
+    if(getaddrinfo(host.c_str(), porta_s, &dicas, &lista) != 0)
+        return false;
+
+    bool ok = false;
+
+    for(struct addrinfo* a = lista; a != NULL && !ok; a = a->ai_next) {
+
+        int fd = socket(a->ai_family, a->ai_socktype | SOCK_NONBLOCK | SOCK_CLOEXEC, a->ai_protocol);
+        if(fd < 0)
+            continue;
+
+        if(connect(fd, a->ai_addr, a->ai_addrlen) == 0) {
+            ok = true;
+        } else if(errno == EINPROGRESS) {
+            struct pollfd pfd = { fd, POLLOUT, 0 };
+            int erro = 0;
+            socklen_t tam = sizeof(erro);
+            if(poll(&pfd, 1, 500) == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, &erro, &tam) == 0 && erro == 0)
+                ok = true;
+        }
+
+        close(fd);
+    }
+
+    freeaddrinfo(lista);
+
+    return ok;
+}
+
+static bool host_local(const std::string& host) {
+
+    return host == "localhost" || host == "127.0.0.1" || host == "::1";
+}
+
 pid_t org_logistica_init_broker_mqtt(void) {
 
-    std::string exe = "mosquitto -p 1883";
+    std::string host;
+    int porta;
+    endereco_broker(host, porta);
+
+    // Já há um broker (o serviço do sistema, ou um subido à mão): usa ele.
+    // Subir outro na mesma porta falharia com "Address already in use".
+    if(broker_responde(host, porta)) {
+        log_msg("ORGANIZADOR", "broker MQTT já rodando em %s:%d; usando ele", host.c_str(), porta);
+        return 0;
+    }
+
+    if(!host_local(host)) {
+        log_msg("ORGANIZADOR", "broker MQTT em %s:%d não responde, e só dá para subir um nesta máquina", host.c_str(), porta);
+        return (pid_t)-1;
+    }
+
+    char porta_s[16];
+    snprintf(porta_s, sizeof(porta_s), "%d", porta);
+
+    char* const argv[] = { (char*)"mosquitto", (char*)"-p", porta_s, NULL };
 
     pid_t pai = getpid();
 
@@ -529,92 +622,111 @@ pid_t org_logistica_init_broker_mqtt(void) {
 
     if(pid_broker == 0) {
 
-        // preparar_filho(pai);
+        preparar_filho(pai);
 
-        execl(
-                exe.c_str(),
-                "broker_mqtt",
-                (char*)NULL);
-
+        // execvp procura no PATH; no Ubuntu o mosquitto fica em /usr/sbin,
+        // que nem sempre está no PATH de um usuário comum
+        execvp(argv[0], argv);
+        execv("/usr/sbin/mosquitto", argv);
 
         // Só chega aqui se o exec falhou. Sem o _exit, o filho continuaria
         // rodando uma segunda cópia do Organizador.
-        // perror(exe.c_str());
-        // _exit(127);
+        perror("mosquitto");
+        _exit(127);
     }
 
-    int status;
+    log_msg("ORGANIZADOR", "Broker MQTT iniciado (pid %d) em %s:%d", pid_broker, host.c_str(), porta);
 
-    waitpid(pid_broker, &status, NULL);
+    // Espera ele aceitar conexões: o Gestor com --fonte mqtt conecta logo
+    struct timespec intervalo = { 0, INTERVALO_VERIFICA_MS * 1000000L };
 
-    return pid_broker;
+    for(int ms=0;ms<ESPERA_BROKER_MS;ms+=INTERVALO_VERIFICA_MS) {
+
+        if(broker_responde(host, porta))
+            return pid_broker;
+
+        if(filho_terminou(pid_broker, "Broker MQTT"))
+            return (pid_t)-1;
+
+        nanosleep(&intervalo, NULL);
+    }
+
+    log_msg("ORGANIZADOR", "o Broker MQTT não aceitou conexões em %d ms", ESPERA_BROKER_MS);
+
+    encerrar_filho(pid_broker, "Broker MQTT", ESPERA_FIM_COLETOR_MS);
+
+    return (pid_t)-1;
 }
 
 void org_logistica_close_broker_mqtt(pid_t pid_broker) {
 
+    // 0: o broker já estava rodando e não é deste Organizador
     if(pid_broker <= 0)
         return;
 
-    kill(pid_broker, SIGTERM);
-
-    // encerrar_filho(pid_broker, "Broker MQTT", ESPERA_FIM_GESTOR_MS);
+    encerrar_filho(pid_broker, "Broker MQTT", ESPERA_FIM_COLETOR_MS);
 }
 
 pid_t org_logistica_init_tela(void) {
 
-    std::string exe = "python3 simulador/main.py";
+    // simulador/ fica na raiz do repositório, ao lado de bin/
+    std::string raiz = pasta_do_executavel() + "/..";
+    std::string script = raiz + "/simulador/main.py";
+
+    if(access(script.c_str(), R_OK) < 0) {
+        log_msg("ORGANIZADOR", "Tela de Operação não encontrada: %s", script.c_str());
+        return (pid_t)-1;
+    }
+
+    // Sem interface gráfica (servidor, WSL sem WSLg) o simulador roda só com
+    // a física e o MQTT: os robôs continuam tendo hardware
+    bool sem_janela = (getenv("DISPLAY") == NULL || getenv("DISPLAY")[0] == '\0')
+                   && (getenv("WAYLAND_DISPLAY") == NULL || getenv("WAYLAND_DISPLAY")[0] == '\0');
+
+    std::vector<char*> argv;
+    argv.push_back((char*)"python3");
+    argv.push_back((char*)script.c_str());
+    if(sem_janela)
+        argv.push_back((char*)"--sem-janela");
+    argv.push_back(NULL);
 
     pid_t pai = getpid();
 
     pid_t pid_tela = fork();
 
     if(pid_tela < 0) {
-        log_msg("ORGANIZADOR", "fork da TELA: %s", strerror(errno));
+        log_msg("ORGANIZADOR", "fork da Tela de Operação: %s", strerror(errno));
         return (pid_t)-1;
     }
 
     if(pid_tela == 0) {
 
-        // preparar_filho(pai);
+        preparar_filho(pai);
 
-          execlp(
-                "gnome-terminal",
-                "gnome-terminal",
-                "--",
-                "bash",
-                "-c",
-                "echo $$ > /tmp/tela.pid; exec python3 simulador/main.py",
-                (char*)NULL
-          );
-        // Só chega aqui se o exec falhou. Sem o _exit, o filho continuaria
-        // rodando uma segunda cópia do Organizador.
-        // perror(exe.c_str());
-        // _exit(127);
+        execvp(argv[0], argv.data());
+
+        perror("python3");
+        _exit(127);
     }
 
-    int status;
+    log_msg("ORGANIZADOR", "Tela de Operação iniciada (pid %d)%s", pid_tela,
+            sem_janela ? " sem janela (DISPLAY não definido)" : "");
 
-    // waitpid(pid_tela, &status, NULL);
+    // Erros comuns aparecem logo: pygame ou paho-mqtt não instalados,
+    // janela que não abre
+    if(!continua_vivo(pid_tela, "Tela de Operação", ESPERA_TELA_MS)) {
+        log_msg("ORGANIZADOR", "veja simulador/README.md (pip install -r simulador/requirements.txt), "
+                               "ou rode sem ela com --sem-tela");
+        return (pid_t)-1;
+    }
 
     return pid_tela;
-
 }
 
 void org_logistica_close_tela(pid_t pid_tela) {
 
-    std::ifstream file("/tmp/tela.pid");
-
-    pid_t pid;
-
-    if (!(file >> pid)) {
+    if(pid_tela <= 0)
         return;
-    }
 
-    file.close();
-
-    // Solicita encerramento do gestor
-    kill(pid, SIGTERM);
-
-    // encerrar_filho(pid_tela, "Tela", ESPERA_FIM_GESTOR_MS);
-
+    encerrar_filho(pid_tela, "Tela de Operação", ESPERA_FIM_COLETOR_MS);
 }

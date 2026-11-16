@@ -26,7 +26,9 @@ if ! (exec 3<>/dev/tcp/localhost/1883) 2>/dev/null; then
 fi
 
 # ATR_HW=mqtt: os robôs usam o hardware do simulador (Python) em vez da física interna
-ATR_HW=mqtt ./bin/org_logistica > $LOGS/organizador.log 2>&1 &
+# --sem-tela: o teste roda o próprio simulador (dois publicariam as entradas
+# dos mesmos robôs)
+ATR_HW=mqtt ./bin/org_logistica --sem-tela > $LOGS/organizador.log 2>&1 &
 PID_ORG=$!
 sleep 2
 

@@ -2,7 +2,7 @@
  * Processo do Organizador da Logística.
  *
  * Uso: org_logistica [--fonte fifo|mqtt] [--fifo <caminho>]
- *                    [--sem-gestor] [--sem-coletor]
+ *                    [--sem-gestor] [--sem-coletor] [--sem-broker] [--sem-tela]
  *
  *   Executado da raiz do repositório (por causa de coordenadas.txt).
  *
@@ -13,11 +13,17 @@
  *                      simulador anuncia os robôs pelo broker); fifo para
  *                      testar sem broker, com bin/novo_robo
  *
- *   Ordem: limpa os restos de IPC de uma queda, sobe o Gestor, espera ele
- *   criar a /atr_frota e só então sobe o Coletor (que também a abre).
+ *   Ordem: limpa os restos de IPC de uma queda, sobe o broker, sobe o
+ *   Gestor, espera ele criar a /atr_frota, sobe o Coletor (que também a
+ *   abre) e por último a Tela (os anúncios de robôs dela precisam do Gestor
+ *   já ouvindo). Encerra na ordem inversa, com o broker por último.
  *   --sem-gestor       não sobe o Gestor: usa um que já esteja rodando
  *   --sem-coletor      não sobe o Coletor: usa um que já esteja rodando
  *                      (ou roda sem ele)
+ *   --sem-broker       não sobe o broker MQTT (sem a opção, só sobe um se
+ *                      nenhum responder em ATR_MQTT_HOST/ATR_MQTT_PORT)
+ *   --sem-tela         não sobe a Tela de Operação / simulador
+ *                      (python3 simulador/main.py)
  *
  * Threads:
  *   - principal:     trata SIGINT/SIGTERM (sigwait) e coordena o encerramento
@@ -74,7 +80,8 @@
 #define ARQUIVO_CARGAS      "cargas_iniciais.txt"
 
 static void uso(const char* prog) {
-    fprintf(stderr, "uso: %s [--fonte fifo|mqtt] [--fifo <caminho>] [--sem-gestor] [--sem-coletor]\n", prog);
+    fprintf(stderr, "uso: %s [--fonte fifo|mqtt] [--fifo <caminho>] [--sem-gestor] [--sem-coletor] "
+                    "[--sem-broker] [--sem-tela]\n", prog);
 }
 
 int main(int argc, char** argv) {
@@ -98,6 +105,10 @@ int main(int argc, char** argv) {
             sobe_gestor = false;
         } else if(strcmp(argv[i], "--sem-coletor") == 0) {
             sobe_coletor = false;
+        } else if(strcmp(argv[i], "--sem-broker") == 0) {
+            sobe_broker = false;
+        } else if(strcmp(argv[i], "--sem-tela") == 0) {
+            sobe_tela = false;
         } else {
             uso(argv[0]);
             return 2;
@@ -133,9 +144,16 @@ int main(int argc, char** argv) {
     if(sobe_coletor && mq_coletor_remover())
         log_msg("ORGANIZADOR", "removida fila %s de uma execução anterior", MQ_COLETOR_ORGANIZADOR);
 
-     // Os filhos zeram a máscara de sinais antes do exec (preparar_filho), então
+    // A Tela é também o simulador do hardware: com ela, os robôs precisam
+    // usar o hardware por MQTT (senão cada processo de robô simula a própria
+    // física e o simulador não os controla). Herdado pelo Gestor e pelos
+    // robôs; quem já definiu ATR_HW mantém o seu valor.
+    if(sobe_tela && fonte == "mqtt" && setenv("ATR_HW", "mqtt", 0) == 0 && strcmp(getenv("ATR_HW"), "mqtt") == 0)
+        log_msg("ORGANIZADOR", "robôs com hardware pelo simulador (ATR_HW=mqtt)");
+
+    // Os filhos zeram a máscara de sinais antes do exec (preparar_filho), então
     // a ordem em relação ao pthread_sigmask abaixo não importa para eles
-    
+
     pid_t pid_tela = (pid_t)-1;
 
     pid_t pid_broker = (pid_t)-1;
@@ -148,28 +166,20 @@ int main(int argc, char** argv) {
 
 
     // Em toda saída daqui para a frente: o Gestor primeiro (ele encerra os
-    // robôs), depois o Coletor (que ainda registra esse encerramento)
+    // robôs), depois o Coletor (que ainda registra esse encerramento), a Tela
+    // e por último o broker (os robôs publicam "offline" ao sair)
     auto encerrar_filhos = [&]() {
         org_logistica_close_gestor(pid_gestor);
         org_logistica_close_coletor(pid_coletor);
         org_logistica_close_tela(pid_tela);
         org_logistica_close_broker_mqtt(pid_broker);
-
     };
 
-        // Inicializa Broker Mqtt
+    // Inicializa o Broker MQTT antes do Gestor: com --fonte mqtt ele conecta
+    // logo ao subir, e sai com erro se não houver broker
     if(sobe_broker) {
         pid_broker = org_logistica_init_broker_mqtt();
         if(pid_broker < 0) {
-            encerrar_filhos();
-            return 1;
-        }
-    }
-
-    // Inicializa tela
-    if(sobe_tela) {
-        pid_tela = org_logistica_init_tela();
-        if(pid_tela < 0) {
             encerrar_filhos();
             return 1;
         }
@@ -210,6 +220,16 @@ int main(int argc, char** argv) {
     if(sobe_coletor) {
         pid_coletor = org_logistica_init_coletor();
         if(pid_coletor < 0 || !org_logistica_esperar_coletor(pid_coletor)) {
+            encerrar_filhos();
+            return 1;
+        }
+    }
+
+    // Inicializa a Tela por último: os robôs que ela anunciar precisam do
+    // Gestor já ouvindo
+    if(sobe_tela) {
+        pid_tela = org_logistica_init_tela();
+        if(pid_tela < 0) {
             encerrar_filhos();
             return 1;
         }
