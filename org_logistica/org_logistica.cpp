@@ -83,6 +83,8 @@ int main(int argc, char** argv) {
     std::vector<std::string> args_gestor;
     bool sobe_gestor = true;
     bool sobe_coletor = true;
+    bool sobe_broker = true;
+    bool sobe_tela = true;
 
     for(int i=1;i<argc;i++) {
 
@@ -131,22 +133,51 @@ int main(int argc, char** argv) {
     if(sobe_coletor && mq_coletor_remover())
         log_msg("ORGANIZADOR", "removida fila %s de uma execução anterior", MQ_COLETOR_ORGANIZADOR);
 
-    // Os filhos zeram a máscara de sinais antes do exec (preparar_filho), então
+     // Os filhos zeram a máscara de sinais antes do exec (preparar_filho), então
     // a ordem em relação ao pthread_sigmask abaixo não importa para eles
+    
+    pid_t pid_tela = (pid_t)-1;
 
-    // Inicializa o Gestor
-    pid_t pid_gestor = sobe_gestor ? org_logistica_init_gestor(args_gestor) : (pid_t)-1;
+    pid_t pid_broker = (pid_t)-1;
+
+    pid_t pid_gestor = (pid_t)-1;
 
     // O Coletor só sobe depois que o Gestor estiver pronto (ele também abre
     // a /atr_frota)
     pid_t pid_coletor = (pid_t)-1;
+
 
     // Em toda saída daqui para a frente: o Gestor primeiro (ele encerra os
     // robôs), depois o Coletor (que ainda registra esse encerramento)
     auto encerrar_filhos = [&]() {
         org_logistica_close_gestor(pid_gestor);
         org_logistica_close_coletor(pid_coletor);
+        org_logistica_close_tela(pid_tela);
+        org_logistica_close_broker_mqtt(pid_broker);
+
     };
+
+        // Inicializa Broker Mqtt
+    if(sobe_broker) {
+        pid_broker = org_logistica_init_broker_mqtt();
+        if(pid_broker < 0) {
+            encerrar_filhos();
+            return 1;
+        }
+    }
+
+    // Inicializa tela
+    if(sobe_tela) {
+        pid_tela = org_logistica_init_tela();
+        if(pid_tela < 0) {
+            encerrar_filhos();
+            return 1;
+        }
+    }
+
+    // Inicializa o Gestor
+    pid_gestor = sobe_gestor ? org_logistica_init_gestor(args_gestor) : (pid_t)-1;
+
 
     if(sobe_gestor && pid_gestor < 0) {
         encerrar_filhos();

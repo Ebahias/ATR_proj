@@ -513,3 +513,108 @@ void org_logistica_close_coletor(pid_t pid_coletor) {
     #endif
 
 }
+
+pid_t org_logistica_init_broker_mqtt(void) {
+
+    std::string exe = "mosquitto -p 1883";
+
+    pid_t pai = getpid();
+
+    pid_t pid_broker = fork();
+
+    if(pid_broker < 0) {
+        log_msg("ORGANIZADOR", "fork do Broker MQTT: %s", strerror(errno));
+        return (pid_t)-1;
+    }
+
+    if(pid_broker == 0) {
+
+        // preparar_filho(pai);
+
+        execl(
+                exe.c_str(),
+                "broker_mqtt",
+                (char*)NULL);
+
+
+        // Só chega aqui se o exec falhou. Sem o _exit, o filho continuaria
+        // rodando uma segunda cópia do Organizador.
+        // perror(exe.c_str());
+        // _exit(127);
+    }
+
+    int status;
+
+    waitpid(pid_broker, &status, NULL);
+
+    return pid_broker;
+}
+
+void org_logistica_close_broker_mqtt(pid_t pid_broker) {
+
+    if(pid_broker <= 0)
+        return;
+
+    kill(pid_broker, SIGTERM);
+
+    // encerrar_filho(pid_broker, "Broker MQTT", ESPERA_FIM_GESTOR_MS);
+}
+
+pid_t org_logistica_init_tela(void) {
+
+    std::string exe = "python3 simulador/main.py";
+
+    pid_t pai = getpid();
+
+    pid_t pid_tela = fork();
+
+    if(pid_tela < 0) {
+        log_msg("ORGANIZADOR", "fork da TELA: %s", strerror(errno));
+        return (pid_t)-1;
+    }
+
+    if(pid_tela == 0) {
+
+        // preparar_filho(pai);
+
+          execlp(
+                "gnome-terminal",
+                "gnome-terminal",
+                "--",
+                "bash",
+                "-c",
+                "echo $$ > /tmp/tela.pid; exec python3 simulador/main.py",
+                (char*)NULL
+          );
+        // Só chega aqui se o exec falhou. Sem o _exit, o filho continuaria
+        // rodando uma segunda cópia do Organizador.
+        // perror(exe.c_str());
+        // _exit(127);
+    }
+
+    int status;
+
+    // waitpid(pid_tela, &status, NULL);
+
+    return pid_tela;
+
+}
+
+void org_logistica_close_tela(pid_t pid_tela) {
+
+    std::ifstream file("/tmp/tela.pid");
+
+    pid_t pid;
+
+    if (!(file >> pid)) {
+        return;
+    }
+
+    file.close();
+
+    // Solicita encerramento do gestor
+    kill(pid, SIGTERM);
+
+    // encerrar_filho(pid_tela, "Tela", ESPERA_FIM_GESTOR_MS);
+
+}
