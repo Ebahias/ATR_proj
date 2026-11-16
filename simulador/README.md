@@ -53,11 +53,11 @@ Gestor criar a `/atr_frota` antes de abri-la.
 
 | Região | O que faz |
 |---|---|
-| **Mapa** (centro) | Baias à esquerda, zonas à direita, estações de recarga, corredores. Robôs coloridos por estado, com selo **M** (manual), ⚠ (defeito), ⚡ (recarregando), ⏳ (esperando passagem) e barra de bateria. Caixas pendentes dentro das baias, entregues (✓) dentro das zonas, e a caixa carregada entre os robôs da equipe. Cada passagem estreita mostra `ocupação/capacidade` (laranja = cheia, **vermelho piscando = violação**) |
+| **Mapa** (centro) | Baias à esquerda, zonas à direita, estações de recarga, corredores. Robôs coloridos por estado, com selo **M** (manual), ⚠ (defeito), ⚡ (recarregando), ⏳ (esperando passagem) e barra de bateria. Caixas pendentes dentro das baias; a caixa com equipe já designada **continua na baia (borda azul) até ser coletada**, então desliza até a equipe; entregues (✓) dentro das zonas. Os robôs que carregam uma caixa são desenhados **nos lados/cantos dela** (1-2 robôs nos lados, 3 em T, 4 nos cantos), mesmo que a navegação os deixe no mesmo ponto (é só desenho: a posição física e a conferência de passagens não mudam). Cada passagem estreita mostra `ocupação/capacidade` (laranja = cheia, **vermelho piscando = violação**) |
 | **ROBÔS** | Um cartão por robô (estado, bateria, posição → destino, fase da tarefa). A pílula **AUTO/MANUAL** troca o modo |
 | **OPERAÇÃO** | Para o robô selecionado: modo, destino rápido (Baia 1-4, Zona A-D, Recarga 1-2), campo `x y`, Parar. Destino só vale em **modo manual** (em automático a tela avisa) |
 | **SIMULADOR** | Gerar/reparar defeito, bateria −10% ou → 15%, **novo robô** (posição padrão, aleatória ou clicando no mapa), **nova caixa** (baia e tamanho) e as estatísticas da física |
-| **CAIXAS / EVENTOS** | Pendentes por baia, missões em transporte, total entregue; log em tempo real com filtro por robô |
+| **CAIXAS / EVENTOS** | Pendentes por baia (as com equipe a caminho com borda azul), missões com estado *buscando* / *transportando*, total entregue; log em tempo real com filtro por robô |
 
 Mouse: clique no robô seleciona; **botão direito no mapa** envia destino arbitrário ao selecionado (manual).
 Teclado: `Tab` próximo robô · `M` modo · `F` defeito · `B` bateria −10% · `Espaço` parar · `N` nomes dos nós ·
@@ -109,7 +109,7 @@ Linha reta até o setpoint a 40 un/s; bateria −0,5 %/s andando e −0,05 %/s p
 ## Testes
 
 ```sh
-make teste-simulador-unit   # 59 testes, ~1 s, sem broker e sem janela
+make teste-simulador-unit   # 69 testes, ~2 s, sem broker e sem janela
 make teste-simulador        # integração: broker + Organizador real + simulador (clica nos botões)
 ```
 
@@ -117,6 +117,19 @@ A integração (`simulador/testes/integracao.py`, via `testes/teste_simulador.sh
 transporte colaborativo e entregas, modo manual com os três tipos de destino, defeito, recarga,
 morte do processo de um robô e **reinício do simulador com adoção**, e salva capturas em
 `run/teste_simulador/`.
+
+### Medindo o aproveitamento da frota
+
+```sh
+./testes/teste_ocupacao.sh [robôs] [segundos]     # padrão: 5 robôs, até 150 s (make teste-ocupacao)
+```
+
+Sobe N robôs em posições fixas e amostra o status do Organizador a cada 100 ms até todas as caixas
+serem entregues. Imprime o **tempo até entregar tudo**, as missões simultâneas (média e máximo) e a
+**ociosidade evitável**: tempo em que há robôs ociosos em número suficiente para a menor caixa pendente
+(alguma equipe poderia estar trabalhando e não está). `OCUPACAO_DIAG=1` imprime o estado detalhado
+nesses momentos. As execuções variam entre si (as threads do Organizador não são determinísticas):
+compare várias.
 
 Desempenho medido (máquina de 1 núcleo, sem GPU): com **32 robôs** o pior ciclo de física levou
 ~1,8 ms (orçamento de 20 ms), 536 entradas/s publicadas e 3,9 ms por quadro de desenho
@@ -127,5 +140,7 @@ Desempenho medido (máquina de 1 núcleo, sem GPU): com **32 robôs** o pior cic
 * `atr/eventos` não é retido: depois de abrir a tela, as entregas por zona (✓ nas zonas) contam só a
   sessão; o total geral (`Entregues`) vem de `atr/cargas` e é completo.
 * O ✓ de caixa entregue não mostra o tamanho (o registro de carga não o informa).
+* A formação dos robôs em torno da caixa é só visual; a posição física de cada robô continua a que a
+  navegação define (e é ela que o simulador usa para conferir as passagens).
 * Os robôs não colidem entre si na física: evitar colisão é papel da navegação (a tela só confere a
   capacidade das passagens estreitas).

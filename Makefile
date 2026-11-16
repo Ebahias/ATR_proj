@@ -53,7 +53,7 @@ PROGRAMAS := $(BIN)/gestor_robos $(BIN)/robo $(BIN)/novo_robo $(BIN)/escuta_gest
 obj = $(patsubst %.cpp,$(BUILD)/%.o,$(1))
 
 .PHONY: all clean teste teste-gestor teste-robo teste-navegacao teste-status teste-coletor \
-        sim teste-simulador teste-simulador-unit
+        sim teste-simulador teste-simulador-unit teste-ocupacao
 
 all: $(PROGRAMAS) $(BIN)/mapa.json
 
@@ -109,6 +109,10 @@ teste-simulador-unit:
 # Integração contra o sistema real (precisa de mosquitto e das dependências Python)
 teste-simulador: all
 	./testes/teste_simulador.sh
+
+# Aproveitamento da frota: tempo até entregar tudo e robôs ociosos com caixa atendível
+teste-ocupacao: all
+	./testes/teste_ocupacao.sh
 
 clean:
 	rm -rf $(BIN) $(BUILD)

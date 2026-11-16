@@ -718,6 +718,123 @@ class TestInterface(unittest.TestCase):
         ui.tecla(self.pygame.event.Event(self.pygame.KEYDOWN, key=self.pygame.K_RETURN, unicode="\r"))
         self.assertTrue(any("Digite o destino" in a for a in c.avisos_ativos()))
 
+    # ---- caixas e formação das equipes
+    def cena(self, atracadas, fase, tarefa=1, robos=(1, 2, 3), tam=3, baia=4, pos=(30, 95)):
+        """Missão com os robôs todos no mesmo ponto (como a navegação os deixa) e a caixa na baia."""
+        mundo, op, _, c, ui, canvas = self.montar()
+        for rid in robos:
+            mundo.adicionar(rid, *pos)
+        for r in mundo.robos.values():
+            r.atracada = atracadas
+        op.atualizar_frota(status_json(*[{"id": rid, "estado": "operando carga", "fase": fase, "tarefa": tarefa,
+                                          "x": pos[0], "y": pos[1], "atracada": int(atracadas)} for rid in robos]))
+        op.atualizar_cargas(json.dumps({"t": 1, "baias": [{"baia": b, "pendentes": []} for b in range(1, 5)],
+                                        "em_transporte": [{"tarefa": tarefa, "baia": baia, "destino": "Zona B",
+                                                           "tamanho": tam, "robos": list(robos)}], "entregues": 0}))
+        return mundo, op, c, ui, canvas
+
+    def quadros(self, ui, canvas, n=40, dt=0.05):
+        for _ in range(n):
+            ui._t_ant = time.monotonic() - dt
+            ui.desenhar(canvas)
+
+    def test_caixa_fica_na_baia_ate_a_equipe_coleta(self):
+        for fase in ("ir_coleta", "aguardando_equipe", "acoplando"):
+            mundo, op, c, ui, canvas = self.cena(False, fase)
+            ui.desenhar(canvas)
+            self.assertEqual(ui._reservadas, {4: [(1, 3)]}, fase)
+            self.assertEqual(ui._equipes, [], fase)
+            self.assertEqual(ui._estado_missao[1], "buscando")
+
+    def test_caixa_sai_da_baia_quando_os_robos_atracam(self):
+        mundo, op, c, ui, canvas = self.cena(True, "transportando")
+        ui.desenhar(canvas)
+        self.assertEqual(ui._reservadas, {})
+        self.assertEqual(len(ui._equipes), 1)
+        self.assertEqual(ui._equipes[0]["robos"], [1, 2, 3])
+        self.assertEqual(ui._estado_missao[1], "transportando")
+
+    def test_caixa_nao_volta_para_a_baia_ao_soltar_no_destino(self):
+        # Robôs já soltaram (atracada = 0) mas a missão ainda não terminou: fase "entregando"
+        mundo, op, c, ui, canvas = self.cena(False, "entregando")
+        ui.desenhar(canvas)
+        self.assertEqual(ui._reservadas, {})
+
+    def test_fase_de_tarefa_antiga_nao_conta_como_coletada(self):
+        # Status "concluida" de uma tarefa ANTERIOR (id diferente) não pode tirar a caixa da baia
+        mundo, op, c, ui, canvas = self.cena(False, "concluida", tarefa=7)
+        cg = op.snapshot()["cargas"]
+        cg["em_transporte"][0]["tarefa"] = 8
+        op.atualizar_cargas(json.dumps(cg))
+        ui.desenhar(canvas)
+        self.assertEqual(ui._reservadas, {4: [(8, 3)]})
+
+    def test_caixa_desliza_da_baia_ate_a_equipe(self):
+        mundo, op, c, ui, canvas = self.cena(False, "aguardando_equipe")
+        ui.desenhar(canvas)
+        slot = ui._slot_reservada[1]                        # onde a caixa estava na baia
+        for r in mundo.robos.values():
+            r.atracada = True
+        op.atualizar_frota(status_json(*[{"id": rid, "estado": "operando carga", "fase": "transportando", "tarefa": 1,
+                                          "x": 30, "y": 95, "atracada": 1} for rid in (1, 2, 3)]))
+        ui.desenhar(canvas)
+        primeiro = ui._equipes[0]["centro"]
+        self.quadros(ui, canvas, 60)
+        ultimo = ui._equipes[0]["centro"]
+        alvo = ui.px(30, 95)
+        self.assertLess(math.hypot(primeiro[0] - slot[0], primeiro[1] - slot[1]), 30)   # começa perto do lugar na baia
+        self.assertLess(math.hypot(ultimo[0] - alvo[0], ultimo[1] - alvo[1]), 1.0)      # termina na equipe
+
+    def test_robos_no_mesmo_ponto_ficam_nos_lados_da_caixa(self):
+        mundo, op, c, ui, canvas = self.cena(True, "transportando", robos=(1, 2))
+        mundo.robos[1].x = mundo.robos[2].x = 100.0         # exatamente o mesmo ponto
+        self.quadros(ui, canvas, 60)
+        a, b = ui._exib[1], ui._exib[2]
+        centro = ui._equipes[0]["centro"]
+        self.assertGreater(abs(a[0] - b[0]), 30)            # separados, com a caixa no meio
+        self.assertAlmostEqual((a[1] + b[1]) / 2, centro[1], delta=1)
+        self.assertAlmostEqual((a[0] + b[0]) / 2, centro[0], delta=1)
+        self.assertTrue(min(a[0], b[0]) < centro[0] < max(a[0], b[0]))  # um de cada lado da caixa
+
+    def test_formacao_para_1_2_3_e_4_robos(self):
+        from simulador.gui import Interface
+        for n in (1, 2, 3, 4):
+            slots = Interface.slots_formacao(n, 38)
+            self.assertEqual(len(slots), n if n > 1 else 1)
+            # nenhum robô sobre o centro da caixa, e nenhum par sobreposto (raio do robô = 11 px)
+            for (sx, sy) in slots:
+                self.assertGreater(math.hypot(sx, sy), 19)
+            for i in range(len(slots)):
+                for j in range(i + 1, len(slots)):
+                    self.assertGreater(math.hypot(slots[i][0] - slots[j][0], slots[i][1] - slots[j][1]), 24)
+        cantos = Interface.slots_formacao(4, 38)
+        self.assertEqual({(round(abs(x)), round(abs(y))) for x, y in cantos}, {(22, 22)})   # 4 cantos
+
+    def test_formacao_desfaz_ao_soltar_a_carga(self):
+        mundo, op, c, ui, canvas = self.cena(True, "transportando", robos=(1, 2))
+        self.quadros(ui, canvas, 60)
+        self.assertGreater(abs(ui._exib[1][0] - ui.px(30, 95)[0]), 20)
+        for r in mundo.robos.values():
+            r.atracada = False
+        op.atualizar_cargas(json.dumps({"t": 2, "baias": [], "em_transporte": [], "entregues": 1}))
+        self.quadros(ui, canvas, 80)
+        for rid in (1, 2):
+            self.assertAlmostEqual(ui._exib[rid][0], ui.px(30, 95)[0], delta=1)
+
+    def test_clique_seleciona_o_robo_onde_ele_e_desenhado(self):
+        mundo, op, c, ui, canvas = self.cena(True, "transportando", robos=(1, 2))
+        self.quadros(ui, canvas, 60)
+        for rid in (1, 2):
+            ui.clique((int(ui._exib[rid][0]), int(ui._exib[rid][1])), 1)
+            self.assertEqual(c.sel, rid)
+
+    def test_desenha_com_equipes_de_1_a_4_robos_sem_erro(self):
+        for n in (1, 2, 3, 4):
+            mundo, op, c, ui, canvas = self.cena(True, "transportando", robos=tuple(range(1, n + 1)), tam=n)
+            self.quadros(ui, canvas, 20)
+            self.pygame.image.save(canvas, f"/tmp/teste_gui_equipe_{n}.png")
+
+
     def test_atalhos_de_teclado(self):
         mundo, op, cliente, c, ui, canvas = self.montar()
         self.popular(mundo, op)
