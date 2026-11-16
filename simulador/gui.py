@@ -84,6 +84,11 @@ ROTULO_ESTADO = {
     "recarregando": "recarregando", "defeito": "defeito", "iniciando": "iniciando", "inativo": "inativo",
 }
 
+# Fases em que a equipe ainda NÃO coletou a carga: a caixa continua na baia
+FASES_ANTES_DA_COLETA = {"-", "ir_coleta", "aguardando_equipe", "acoplando"}
+
+ANIM_TAXA = 12.0            # suavização (1/s) da entrada em formação e do deslize das caixas
+
 COR_ZONAS = {1: (206, 236, 214), 2: (214, 234, 246), 3: (250, 236, 206), 4: (238, 220, 244)}
 
 # Caixas de tamanho 1 a 4 (lado em pixels lógicos e cor)
@@ -258,6 +263,14 @@ class Interface:
         self.mouse = (0, 0)
         self.lista_scroll = 0
         self._sel_visto = None
+        self._t_ant = None
+        self._exib = {}                     # id -> (px, py) onde o robô é DESENHADO (formação em torno da caixa)
+        self._delta = {}                    # id -> deslocamento suavizado entre a posição real e a desenhada
+        self._equipes = []                  # caixas em transporte: [{tarefa, tam, centro, robos}]
+        self._reservadas = {}               # baia -> [(tarefa, tam)]: caixas com equipe a caminho, ainda na baia
+        self._estado_missao = {}            # tarefa -> "buscando" | "transportando"
+        self._slot_reservada = {}           # tarefa -> (px, py) do último lugar da caixa na baia
+        self._delta_caixa = {}              # tarefa -> deslocamento do deslize baia -> equipe
         self.ev_scroll = 0                  # linhas acima do fim do log (0 = acompanha)
         self.filtro_selecionado = False
         self.mostrar_nos = False
@@ -459,16 +472,116 @@ class Interface:
         elif k in (pygame.K_h, pygame.K_F1):
             self.ajuda = not self.ajuda
 
+    def pos_exibida(self, v):
+        """Onde o robô é desenhado (na formação em torno da caixa, se está carregando)."""
+        return self._exib.get(v["id"]) or self.px(v["x"], v["y"])
+
     def _robo_proximo(self, pos, raio=14):
         melhor, dmin = None, raio
 
         for v in self.c.visoes():
-            d = math.hypot(self.px(v["x"], v["y"])[0] - pos[0], self.px(v["x"], v["y"])[1] - pos[1])
+            ex, ey = self.pos_exibida(v)
+            d = math.hypot(ex - pos[0], ey - pos[1])
 
             if d <= dmin:
                 melhor, dmin = v["id"], d
 
         return melhor
+
+    @staticmethod
+    def slots_formacao(n, lado):
+        """Posições (px, relativas ao centro da caixa) dos n robôs que a carregam:
+        1 e 2 robôs nos lados, 3 em T, 4 nos cantos. Assim a caixa continua visível
+        mesmo que a navegação coloque a equipe toda no mesmo ponto."""
+        s = lado / 2 + 13       # lado a lado com a caixa (raio do robô 11 + folga)
+        c = lado / 2 + 3        # cantos
+
+        if n <= 1:
+            return [(-s, 0)]
+        if n == 2:
+            return [(-s, 0), (s, 0)]
+        if n == 3:
+            return [(-s, 0), (s, 0), (0, -s)]
+
+        return [(-c, -c), (c, -c), (-c, c), (c, c)]
+
+    def _preparar_equipes(self, visoes, op, dt):
+        """Decide, por missão, onde está a caixa e onde cada robô é desenhado.
+
+        * Antes da coleta (equipe indo, esperando ou acoplando) a caixa continua
+          NA BAIA (o Organizador a tira da fila ao reservar a equipe, mas ela só
+          sai do lugar quando os robôs a pegam).
+        * Depois, a caixa desliza da baia até o centro da equipe e os robôs se
+          distribuem nos lados/cantos dela, acompanhando o movimento real.
+        """
+        f = 1.0 - math.exp(-ANIM_TAXA * dt)
+        por_id = {v["id"]: v for v in visoes}
+        reais = {v["id"]: self.px(v["x"], v["y"]) for v in visoes}
+        alvos = {rid: (0.0, 0.0) for rid in reais}
+        cargas = op["cargas"]
+        ativas = set()
+
+        self._equipes = []
+        self._reservadas = {}
+        self._estado_missao = {}
+
+        for m in (cargas["em_transporte"] if cargas else []):
+            tarefa = m["tarefa"]
+            tam = m["tamanho"] if m["tamanho"] in LADO_CAIXA else 1
+            membros = [por_id[r] for r in sorted(m["robos"]) if r in por_id]
+
+            if not membros:
+                continue
+
+            ativas.add(tarefa)
+
+            coletada = (any(v["atracada"] for v in membros)
+                        or any(v["tarefa"] == tarefa and v["fase"] not in FASES_ANTES_DA_COLETA for v in membros))
+
+            if not coletada:
+                self._reservadas.setdefault(m["baia"], []).append((tarefa, tam))
+                self._estado_missao[tarefa] = "buscando"
+                continue
+
+            self._estado_missao[tarefa] = "transportando"
+            cx = sum(reais[v["id"]][0] for v in membros) / len(membros)
+            cy = sum(reais[v["id"]][1] for v in membros) / len(membros)
+            slots = self.slots_formacao(len(m["robos"]), LADO_CAIXA[tam])
+
+            for i, rid in enumerate(sorted(m["robos"])):
+                v = por_id.get(rid)
+
+                if v is not None and v["atracada"]:
+                    sx, sy = slots[i % len(slots)]
+                    alvos[rid] = (cx + sx - reais[rid][0], cy + sy - reais[rid][1])
+
+            # A caixa desliza do seu lugar na baia até a equipe (e depois acompanha sem atraso)
+            if tarefa not in self._delta_caixa:
+                ini = self._slot_reservada.pop(tarefa, None)
+                self._delta_caixa[tarefa] = (ini[0] - cx, ini[1] - cy) if ini else (0.0, 0.0)
+
+            dx, dy = self._delta_caixa[tarefa]
+            dx, dy = dx * (1.0 - f), dy * (1.0 - f)
+            self._delta_caixa[tarefa] = (dx, dy)
+            self._equipes.append({"tarefa": tarefa, "tam": tam, "centro": (cx + dx, cy + dy),
+                                  "robos": [rid for rid in sorted(m["robos"]) if rid in por_id and por_id[rid]["atracada"]]})
+
+        for t in [t for t in self._delta_caixa if t not in ativas]:
+            del self._delta_caixa[t]
+
+        for t in [t for t in self._slot_reservada if t not in ativas]:
+            del self._slot_reservada[t]
+
+        # Robôs: o deslocamento suaviza até o alvo (formação ao acoplar, volta ao soltar)
+        for rid, (tx, ty) in alvos.items():
+            dx, dy = self._delta.get(rid, (0.0, 0.0))
+            dx, dy = dx + (tx - dx) * f, dy + (ty - dy) * f
+            self._delta[rid] = (dx, dy)
+            self._exib[rid] = (reais[rid][0] + dx, reais[rid][1] + dy)
+
+        for rid in [r for r in self._delta if r not in reais]:
+            del self._delta[rid]
+            self._exib.pop(rid, None)
 
     # ============================================================ DESENHO
     def desenhar(self, surf):
@@ -476,6 +589,11 @@ class Interface:
         op = self.c.operacao.snapshot()
         ocupacao = self.c.mundo.ocupacao
         violadas = self.c.mundo.passagens_violadas()
+
+        agora = time.monotonic()
+        dt = 0.033 if self._t_ant is None else min(0.1, max(0.0, agora - self._t_ant))
+        self._t_ant = agora
+        self._preparar_equipes(visoes, op, dt)
 
         surf.fill(COR["fundo"])
         self._barra(surf, visoes, op)
@@ -631,7 +749,7 @@ class Interface:
         # Destinos (setpoints): tracejado fraco para todos, forte para o selecionado
         for v in visoes:
             if (round(v["sp_x"]), round(v["sp_y"])) != (round(v["x"]), round(v["y"])):
-                a, b = self.px(v["x"], v["y"]), self.px(v["sp_x"], v["sp_y"])
+                a, b = self.pos_exibida(v), self.px(v["sp_x"], v["sp_y"])
                 sel = v["id"] == self.c.sel
                 cor = COR["selecao"] if sel else (150, 158, 172)
                 linha_tracejada(surf, cor, a, b, 2 if sel else 1)
@@ -644,10 +762,14 @@ class Interface:
 
         surf.set_clip(None)
 
-    def _caixa(self, surf, x, y, lado, tam, texto=None):
+    def _caixa(self, surf, x, y, lado, tam, texto=None, reservada=False):
         r = pygame.Rect(x, y, lado, lado)
         pygame.draw.rect(surf, COR_CAIXA[tam], r, border_radius=3)
-        pygame.draw.rect(surf, (60, 66, 80), r, 1, border_radius=3)
+
+        if reservada:       # equipe já designada e a caminho: a caixa ainda está na baia
+            pygame.draw.rect(surf, COR["info"], r.inflate(4, 4), 2, border_radius=4)
+        else:
+            pygame.draw.rect(surf, (60, 66, 80), r, 1, border_radius=3)
         self.txt(surf, self.fontes.b if lado >= 26 else self.fontes.p, texto or str(tam), r.center, (40, 44, 54), "mc")
 
     def _fluxo(self, surf, rect, itens, desenhar, lado_de):
@@ -679,11 +801,20 @@ class Interface:
             if cargas:
                 pend = next((b["pendentes"] for b in cargas["baias"] if b["baia"] == a["numero"]), [])
 
-            tams = [t for t in pend if t in LADO_CAIXA]
+            # (tamanho, tarefa): tarefa None = ainda sem equipe; com tarefa = equipe a caminho
+            itens = [(t, None) for t in pend if t in LADO_CAIXA]
+            itens += [(tam, tarefa) for (tarefa, tam) in self._reservadas.get(a["numero"], [])]
             x0, y0 = self.px(a["x0"], a["y0"])
             rect = pygame.Rect(x0 + 6, y0 + 26, 27 * ESCALA, (a["y1"] - a["y0"]) * ESCALA - 32)
-            resto = self._fluxo(surf, rect, tams, lambda x, y, t: self._caixa(surf, x, y, LADO_CAIXA[t], t),
-                                lambda t: LADO_CAIXA[t])
+
+            def desenhar_item(x, y, it):
+                tam, tarefa = it
+                self._caixa(surf, x, y, LADO_CAIXA[tam], tam, reservada=tarefa is not None)
+
+                if tarefa is not None:      # lembra onde a caixa estava, para deslizar até a equipe
+                    self._slot_reservada[tarefa] = (x + LADO_CAIXA[tam] / 2, y + LADO_CAIXA[tam] / 2)
+
+            resto = self._fluxo(surf, rect, itens, desenhar_item, lambda it: LADO_CAIXA[it[0]])
 
             if resto:
                 self.txt(surf, self.fontes.b, f"+{resto}", (rect.right - 4, rect.bottom - 2), COR["texto"], "tr")
@@ -706,29 +837,19 @@ class Interface:
                 self.txt(surf, self.fontes.b, f"+{resto}", (rect.right - 4, rect.bottom - 2), COR["texto"], "tr")
 
     def _caixas_em_transporte(self, surf, visoes, op):
-        cargas = op["cargas"]
-
-        if not cargas:
-            return
-
-        por_id = {v["id"]: v for v in visoes}
-
-        for m in cargas["em_transporte"]:
-            equipe = [por_id[r] for r in m["robos"] if r in por_id and por_id[r]["atracada"]]
-
-            if not equipe:
+        """A caixa entre os robôs que a carregam (que ficam nos lados/cantos dela)."""
+        for e in self._equipes:
+            if not e["robos"]:
                 continue
 
-            cx = sum(v["x"] for v in equipe) / len(equipe)
-            cy = sum(v["y"] for v in equipe) / len(equipe)
-            centro = self.px(cx, cy)
-            tam = m["tamanho"] if m["tamanho"] in LADO_CAIXA else 1
+            centro = (int(e["centro"][0]), int(e["centro"][1]))
 
-            for v in equipe:
-                pygame.draw.line(surf, (70, 76, 90), centro, self.px(v["x"], v["y"]), 2)
+            for rid in e["robos"]:
+                if rid in self._exib:
+                    pygame.draw.line(surf, (70, 76, 90), centro, (int(self._exib[rid][0]), int(self._exib[rid][1])), 2)
 
-            lado = LADO_CAIXA[tam]
-            self._caixa(surf, centro[0] - lado // 2, centro[1] - lado // 2, lado, tam)
+            lado = LADO_CAIXA[e["tam"]]
+            self._caixa(surf, centro[0] - lado // 2, centro[1] - lado // 2, lado, e["tam"])
 
     # ------------------------------------------------------------ robô
     def estado_efetivo(self, v):
@@ -755,7 +876,7 @@ class Interface:
         pygame.draw.polygon(surf, (110, 70, 0), [(cx - s, cy - s), (cx + s, cy - s), (cx, cy), (cx + s, cy + s), (cx - s, cy + s), (cx, cy)], 1)
 
     def _robo(self, surf, v):
-        cx, cy = self.px(v["x"], v["y"])
+        cx, cy = (int(c) for c in self.pos_exibida(v))
         estado = self.estado_efetivo(v)
         cor = COR_ESTADO.get(estado, COR_ESTADO["iniciando"])
         sel = v["id"] == self.c.sel
@@ -973,20 +1094,24 @@ class Interface:
             if cargas:
                 pend = next((b["pendentes"] for b in cargas["baias"] if b["baia"] == numero), [])
 
+            # Com a equipe já designada a caixa continua na baia (borda azul) até ser coletada
+            itens = [(t, False) for t in pend if t in LADO_CAIXA]
+            itens += [(tam, True) for (_, tam) in self._reservadas.get(numero, [])]
+
             self.txt(surf, self.fontes.n, f"Baia {numero}", (x0, y + 1))
             x = x0 + 62
 
-            for t in [t for t in pend if t in LADO_CAIXA][:14]:
-                self._caixa(surf, x, y, 18, t)
+            for t, reservada in itens[:14]:
+                self._caixa(surf, x, y, 18, t, reservada=reservada)
                 x += 22
 
-            if len(pend) > 14:
-                self.txt(surf, self.fontes.p, f"+{len(pend) - 14}", (x, y + 3))
+            if len(itens) > 14:
+                self.txt(surf, self.fontes.p, f"+{len(itens) - 14}", (x, y + 3))
 
-            if not pend:
+            if not itens:
                 self.txt(surf, self.fontes.p, "vazia", (x0 + 62, y + 3), COR["texto_fraco"])
 
-            y += 24
+            y += 21
 
         y += 4
         self.txt(surf, self.fontes.b, "Em transporte", (x0, y))
@@ -999,7 +1124,8 @@ class Interface:
             for m in cargas["em_transporte"][:3]:
                 destino = m["destino"] or "destino a definir"
                 robos = "+".join(str(r) for r in sorted(m["robos"]))
-                self.txt(surf, self.fontes.p, cortar(self.fontes.p, f"#{m['tarefa']}  Baia {m['baia']} → {destino}  ·  tamanho {m['tamanho']}  ·  robôs {robos}", R_CAIXAS.w - 24), (x0 + 4, y))
+                estado = self._estado_missao.get(m["tarefa"], "")
+                self.txt(surf, self.fontes.p, cortar(self.fontes.p, f"#{m['tarefa']}  Baia {m['baia']} → {destino}  ·  tam. {m['tamanho']}  ·  robôs {robos}  ·  {estado}", R_CAIXAS.w - 24), (x0 + 4, y))
                 y += 16
 
         y = R_CAIXAS.bottom - 24

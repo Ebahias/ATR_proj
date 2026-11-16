@@ -155,7 +155,19 @@ def cenario(t):
     t.clicar("Caixa aleatória")
 
     print("5. Transporte colaborativo e entrega (automático)")
-    visto = {"transporte": False}
+    visto = {"transporte": False, "baia": False, "formacao": False}
+
+    def caixa_na_baia():
+        # Equipe designada mas ainda não coletou: a caixa tem de continuar desenhada na baia
+        if ui_reservadas():
+            if not visto["baia"]:
+                t.foto("01b_caixa_reservada_na_baia.png")
+                visto["baia"] = True
+            return True
+        return False
+
+    def ui_reservadas():
+        return any(t.ui._reservadas.values()) and not t.ui._equipes
 
     def em_transporte():
         cg = t.cargas()
@@ -166,7 +178,23 @@ def cenario(t):
             return True
         return False
 
+    def formacao_distribuida():
+        # Robôs que carregam a mesma caixa são DESENHADOS separados (lados/cantos), mesmo no mesmo ponto
+        for e in t.ui._equipes:
+            ids = e["robos"]
+            if len(ids) >= 2 and all(i in t.ui._exib for i in ids):
+                pos = [t.ui._exib[i] for i in ids]
+                dist = min(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5 for k, a in enumerate(pos) for b in pos[k + 1:])
+                if dist > 24:
+                    if not visto["formacao"]:
+                        t.foto("02b_formacao_em_torno_da_caixa.png")
+                        visto["formacao"] = True
+                    return True
+        return False
+
+    t.esperar("caixa continua na baia enquanto a equipe vai buscá-la (borda azul)", caixa_na_baia, 45)
     t.esperar("há robôs com carga atracada (caixa no mapa)", em_transporte, 45)
+    t.esperar("robôs da equipe desenhados distribuídos em torno da caixa", formacao_distribuida, 45)
     t.esperar("ao menos 2 cargas entregues (atr/cargas)", lambda: (t.cargas() or {}).get("entregues", 0) >= 2, 90)
     t.esperar("evento de entrega chegou pelo Coletor", lambda: bool(app.operacao.snapshot()["entregues"]), 10)
     t.esperar("entregas contadas por zona", lambda: sum(app.operacao.snapshot()["por_zona"].values()) >= 1, 5)
